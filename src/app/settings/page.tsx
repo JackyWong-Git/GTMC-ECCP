@@ -643,6 +643,66 @@ export default function SettingsPage() {
           </Card>
         </>
       )}
+
+      {/* 抖音集成 */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <span className="text-xl">🎵</span>
+            抖音开放平台
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between p-4 bg-pink-50 rounded-lg border border-pink-100">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🎵</span>
+              <div>
+                <p className="font-medium text-slate-900">抖音账号</p>
+                <p className="text-xs text-slate-500">
+                  连接后可同步视频播放量、点赞、评论等数据
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.open("/api/douyin/auth", "_blank")}
+            >
+              <ExternalLink className="w-4 h-4 mr-1" />
+              连接抖音
+            </Button>
+          </div>
+
+          <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
+            <h4 className="text-sm font-medium text-slate-900 mb-2">
+              配置说明
+            </h4>
+            <ol className="text-xs text-slate-600 space-y-1 list-decimal list-inside">
+              <li>
+                前往{" "}
+                <a
+                  href="https://developer.open-douyin.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:underline"
+                >
+                  抖音开放平台
+                </a>{" "}
+                创建网站应用
+              </li>
+              <li>
+                配置环境变量 <code className="bg-slate-200 px-1 rounded">DOUYIN_CLIENT_KEY</code> 和{" "}
+                <code className="bg-slate-200 px-1 rounded">DOUYIN_CLIENT_SECRET</code>
+              </li>
+              <li>
+                配置回调地址{" "}
+                <code className="bg-slate-200 px-1 rounded">DOUYIN_REDIRECT_URI</code>
+              </li>
+              <li>申请权限：用户信息、视频列表、视频数据</li>
+            </ol>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

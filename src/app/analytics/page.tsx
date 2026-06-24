@@ -1,601 +1,610 @@
-'use client';
+"use client";
 
-import { useState, useRef } from 'react';
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   TrendingUp,
+  TrendingDown,
   Eye,
   Heart,
   MessageCircle,
   Share2,
-  Calendar,
-  BarChart3,
-  Sparkles,
-  Loader2,
-  X,
-  FileText,
+  Download,
   Upload,
-  Inbox,
   RefreshCw,
-} from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  FileText,
+  Play,
+  ExternalLink,
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+} from "lucide-react";
 
-interface PlatformStat {
+// 平台数据类型
+interface PlatformData {
   platform: string;
-  videos: number;
-  totalViews: number;
-  totalLikes: number;
-  totalComments: number;
-  totalShares: number;
-  avgEngagement: number;
-  trend: string;
+  icon: string;
+  color: string;
+  connected: boolean;
+  summary: {
+    totalViews: number;
+    totalLikes: number;
+    totalComments: number;
+    totalShares: number;
+    videoCount: number;
+  } | null;
+  videos: Array<{
+    id: string;
+    title: string;
+    platform: string;
+    publishDate: string;
+    views: number;
+    likes: number;
+    comments: number;
+    shares: number;
+  }>;
+  lastSynced: string | null;
 }
 
-interface VideoData {
-  id: number;
-  title: string;
-  platform: string;
-  views: number;
-  likes: number;
-  comments: number;
-  shares: number;
-  publishDate: string;
-  engagement: number;
-}
-
-function formatNumber(num: number): string {
-  if (num >= 10000) {
-    return `${(num / 10000).toFixed(1)}w`;
-  }
-  return num.toLocaleString();
-}
+// 初始平台状态
+const initialPlatforms: PlatformData[] = [
+  {
+    platform: "抖音",
+    icon: "🎵",
+    color: "bg-pink-50 border-pink-200",
+    connected: false,
+    summary: null,
+    videos: [],
+    lastSynced: null,
+  },
+  {
+    platform: "视频号",
+    icon: "📺",
+    color: "bg-green-50 border-green-200",
+    connected: false,
+    summary: null,
+    videos: [],
+    lastSynced: null,
+  },
+  {
+    platform: "KILAKILA",
+    icon: "✨",
+    color: "bg-purple-50 border-purple-200",
+    connected: false,
+    summary: null,
+    videos: [],
+    lastSynced: null,
+  },
+];
 
 export default function AnalyticsPage() {
-  const [platformStats, setPlatformStats] = useState<PlatformStat[]>([]);
-  const [topVideos, setTopVideos] = useState<VideoData[]>([]);
-  const [timeRange, setTimeRange] = useState('7d');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [reportContent, setReportContent] = useState('');
-  const [isImporting, setIsImporting] = useState(false);
-  const [showImportDialog, setShowImportDialog] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [platforms, setPlatforms] = useState<PlatformData[]>(initialPlatforms);
+  const [douyinStatus, setDouyinStatus] = useState<{
+    connected: boolean;
+    user: { nickname: string; avatar: string } | null;
+  } | null>(null);
+  const [syncing, setSyncing] = useState<string | null>(null);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importPlatform, setImportPlatform] = useState("");
+  const [importText, setImportText] = useState("");
+  const [importError, setImportError] = useState("");
 
-  const totalViews = platformStats.reduce((sum, p) => sum + p.totalViews, 0);
-  const totalLikes = platformStats.reduce((sum, p) => sum + p.totalLikes, 0);
-  const totalComments = platformStats.reduce((sum, p) => sum + p.totalComments, 0);
-  const totalShares = platformStats.reduce((sum, p) => sum + p.totalShares, 0);
-  const avgEngagement =
-    platformStats.length > 0
-      ? platformStats.reduce((sum, p) => sum + p.avgEngagement, 0) / platformStats.length
-      : 0;
+  // 检查抖音登录状态
+  useEffect(() => {
+    fetch("/api/douyin/status")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setDouyinStatus(data.data);
+          if (data.data.connected) {
+            setPlatforms((prev) =>
+              prev.map((p) =>
+                p.platform === "抖音" ? { ...p, connected: true } : p
+              )
+            );
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
 
-  const handleGenerateReport = async () => {
-    setIsGenerating(true);
-    setReportContent('');
-
+  // 同步抖音数据
+  const syncDouyin = async () => {
+    setSyncing("抖音");
     try {
-      const response = await fetch('/api/data-summary', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          platform: '全平台',
-          period: timeRange === '7d' ? '最近7天' : timeRange === '30d' ? '最近30天' : '最近90天',
-          metrics: {
-            totalViews,
-            totalLikes,
-            totalComments,
-            totalShares,
-            videoCount: platformStats.reduce((sum, p) => sum + p.videos, 0),
-          },
-          topVideos: topVideos.slice(0, 5).map((v) => ({
-            title: v.title,
-            platform: v.platform,
-            views: v.views,
-            likes: v.likes,
-            engagement: v.engagement,
-          })),
-        }),
-      });
+      const res = await fetch("/api/douyin/sync");
+      const data = await res.json();
 
-      const data = await response.json();
       if (data.success) {
-        setReportContent(data.data.summary);
+        setPlatforms((prev) =>
+          prev.map((p) =>
+            p.platform === "抖音"
+              ? {
+                  ...p,
+                  connected: true,
+                  summary: data.data.summary,
+                  videos: data.data.videos,
+                  lastSynced: data.data.syncedAt,
+                }
+              : p
+          )
+        );
+      } else {
+        alert(data.error || "同步失败");
       }
-    } catch (err) {
-      console.error('生成报告失败:', err);
+    } catch {
+      alert("同步失败，请检查网络连接");
     } finally {
-      setIsGenerating(false);
+      setSyncing(null);
     }
   };
 
-  const handleImportFile = async (file: File) => {
-    setIsImporting(true);
+  // 导入数据（视频号/KILAKILA）
+  const handleImport = async () => {
+    setImportError("");
+
+    if (!importText.trim()) {
+      setImportError("请输入数据");
+      return;
+    }
+
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch('/api/import-data', {
-        method: 'POST',
-        body: formData,
+      const res = await fetch("/api/import-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: importText, format: "json" }),
       });
+      const data = await res.json();
 
-      const data = await response.json();
-
-      if (data.success && data.data.rows) {
-        // 解析导入的数据为视频数据
-        const importedVideos: VideoData[] = data.data.rows.map(
-          (row: Record<string, string | number | boolean | null>, index: number) => ({
-            id: Date.now() + index,
-            title: String(row['视频标题'] || row['title'] || row['标题'] || `视频 ${index + 1}`),
-            platform: String(row['平台'] || row['platform'] || '未知'),
-            views: Number(row['播放量'] || row['views'] || row['播放'] || 0),
-            likes: Number(row['点赞'] || row['likes'] || 0),
-            comments: Number(row['评论'] || row['comments'] || 0),
-            shares: Number(row['分享'] || row['shares'] || 0),
-            publishDate: String(row['发布日期'] || row['publishDate'] || new Date().toISOString().split('T')[0]),
-            engagement: Number(row['互动率'] || row['engagement'] || 0),
+      if (data.success) {
+        const videos = data.data.rows.map(
+          (row: Record<string, unknown>, idx: number) => ({
+            id: `import-${Date.now()}-${idx}`,
+            title: String(row.title || row["标题"] || "无标题"),
+            platform: importPlatform,
+            publishDate: String(
+              row.publishDate || row["发布日期"] || new Date().toISOString().split("T")[0]
+            ),
+            views: Number(row.views || row["播放量"] || 0),
+            likes: Number(row.likes || row["点赞"] || 0),
+            comments: Number(row.comments || row["评论"] || 0),
+            shares: Number(row.shares || row["分享"] || 0),
           })
         );
 
-        setTopVideos(importedVideos);
+        const totalViews = videos.reduce(
+          (sum: number, v: { views: number }) => sum + v.views,
+          0
+        );
+        const totalLikes = videos.reduce(
+          (sum: number, v: { likes: number }) => sum + v.likes,
+          0
+        );
+        const totalComments = videos.reduce(
+          (sum: number, v: { comments: number }) => sum + v.comments,
+          0
+        );
+        const totalShares = videos.reduce(
+          (sum: number, v: { shares: number }) => sum + v.shares,
+          0
+        );
 
-        // 按平台汇总
-        const platformMap = new Map<string, PlatformStat>();
-        importedVideos.forEach((video) => {
-          const existing = platformMap.get(video.platform);
-          if (existing) {
-            existing.videos += 1;
-            existing.totalViews += video.views;
-            existing.totalLikes += video.likes;
-            existing.totalComments += video.comments;
-            existing.totalShares += video.shares;
-          } else {
-            platformMap.set(video.platform, {
-              platform: video.platform,
-              videos: 1,
-              totalViews: video.views,
-              totalLikes: video.likes,
-              totalComments: video.comments,
-              totalShares: video.shares,
-              avgEngagement: 0,
-              trend: 'stable',
-            });
-          }
-        });
+        setPlatforms((prev) =>
+          prev.map((p) =>
+            p.platform === importPlatform
+              ? {
+                  ...p,
+                  connected: true,
+                  summary: {
+                    totalViews,
+                    totalLikes,
+                    totalComments,
+                    totalShares,
+                    videoCount: videos.length,
+                  },
+                  videos,
+                  lastSynced: new Date().toISOString(),
+                }
+              : p
+          )
+        );
 
-        // 计算平均互动率
-        platformMap.forEach((stat) => {
-          stat.avgEngagement = stat.totalViews > 0
-            ? Number((((stat.totalLikes + stat.totalComments) / stat.totalViews) * 100).toFixed(1))
-            : 0;
-        });
-
-        setPlatformStats(Array.from(platformMap.values()));
-        setShowImportDialog(false);
+        setImportModalOpen(false);
+        setImportText("");
+      } else {
+        setImportError(data.error || "导入失败");
       }
-    } catch (err) {
-      console.error('导入数据失败:', err);
-    } finally {
-      setIsImporting(false);
+    } catch {
+      setImportError("导入失败，请检查数据格式");
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      handleImportFile(file);
-    }
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
+  // 计算全平台汇总
+  const allVideos = platforms.flatMap((p) => p.videos);
+  const totalViews = platforms.reduce(
+    (sum, p) => sum + (p.summary?.totalViews || 0),
+    0
+  );
+  const totalLikes = platforms.reduce(
+    (sum, p) => sum + (p.summary?.totalLikes || 0),
+    0
+  );
+  const totalComments = platforms.reduce(
+    (sum, p) => sum + (p.summary?.totalComments || 0),
+    0
+  );
+  const totalShares = platforms.reduce(
+    (sum, p) => sum + (p.summary?.totalShares || 0),
+    0
+  );
+  const totalVideos = platforms.reduce(
+    (sum, p) => sum + (p.summary?.videoCount || 0),
+    0
+  );
+  const engagementRate =
+    totalViews > 0
+      ? (((totalLikes + totalComments + totalShares) / totalViews) * 100).toFixed(1)
+      : "0";
 
-  const hasData = platformStats.length > 0;
+  // 热门视频排行（跨平台）
+  const topVideos = [...allVideos]
+    .sort((a, b) => b.views - a.views)
+    .slice(0, 10);
+
+  const formatNumber = (num: number): string => {
+    if (num >= 10000) {
+      return (num / 10000).toFixed(1) + "万";
+    }
+    return num.toLocaleString();
+  };
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
+      {/* 页面标题 */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">数据看板</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            {hasData
-              ? `全平台数据汇总 · ${platformStats.reduce((sum, p) => sum + p.videos, 0)} 个视频`
-              : '导入视频数据查看分析看板'}
+          <p className="text-sm text-slate-500 mt-1">
+            多平台数据汇总 · 抖音 / 视频号 / KILAKILA
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Select value={timeRange} onValueChange={setTimeRange}>
-            <SelectTrigger className="h-9 w-[130px] rounded-lg border-slate-200 text-sm">
-              <Calendar className="mr-2 h-3.5 w-3.5 text-slate-400" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="7d">最近 7 天</SelectItem>
-              <SelectItem value="30d">最近 30 天</SelectItem>
-              <SelectItem value="90d">最近 90 天</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex gap-2">
           <Button
             variant="outline"
             size="sm"
-            className="gap-1.5 text-xs"
-            onClick={() => setShowImportDialog(true)}
+            onClick={() => {
+              setImportPlatform("视频号");
+              setImportModalOpen(true);
+            }}
           >
-            <Upload className="h-3.5 w-3.5" />
-            导入数据
+            <Upload className="w-4 h-4 mr-1" />
+            导入视频号数据
           </Button>
-          {hasData && (
-            <Button
-              className="gap-2 bg-[#0F172A] text-white hover:bg-slate-800"
-              onClick={handleGenerateReport}
-              disabled={isGenerating}
-            >
-              {isGenerating ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4" />
-              )}
-              {isGenerating ? '生成中...' : 'AI 生成周报'}
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setImportPlatform("KILAKILA");
+              setImportModalOpen(true);
+            }}
+          >
+            <Upload className="w-4 h-4 mr-1" />
+            导入KILAKILA数据
+          </Button>
         </div>
       </div>
 
-      {/* Empty State */}
-      {!hasData && (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white py-20">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-50">
-            <BarChart3 className="h-8 w-8 text-slate-300" />
-          </div>
-          <h3 className="mt-4 text-base font-semibold text-slate-700">
-            暂无数据
-          </h3>
-          <p className="mt-1.5 max-w-sm text-center text-sm text-slate-400">
-            导入视频数据（CSV/JSON）后，这里将展示播放量、点赞、评论等全平台数据汇总看板
-          </p>
-          <Button
-            className="mt-6 gap-2 bg-[#0F172A] text-white hover:bg-slate-800"
-            onClick={() => setShowImportDialog(true)}
+      {/* 平台连接状态 */}
+      <div className="grid grid-cols-3 gap-4">
+        {platforms.map((platform) => (
+          <Card
+            key={platform.platform}
+            className={`border ${platform.color}`}
           >
-            <Upload className="h-4 w-4" />
-            导入视频数据
-          </Button>
-        </div>
-      )}
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">{platform.icon}</span>
+                  <div>
+                    <p className="font-medium text-slate-900">
+                      {platform.platform}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {platform.connected
+                        ? platform.lastSynced
+                          ? `上次同步: ${new Date(platform.lastSynced).toLocaleString("zh-CN")}`
+                          : "已连接"
+                        : "未连接"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {platform.connected ? (
+                    <CheckCircle2 className="w-5 h-5 text-green-500" />
+                  ) : (
+                    <AlertCircle className="w-5 h-5 text-slate-300" />
+                  )}
+                  {platform.platform === "抖音" && (
+                    <Button
+                      variant={platform.connected ? "outline" : "default"}
+                      size="sm"
+                      onClick={
+                        platform.connected
+                          ? syncDouyin
+                          : () => window.open("/api/douyin/auth", "_blank")
+                      }
+                      disabled={syncing === "抖音"}
+                    >
+                      {syncing === "抖音" ? (
+                        <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                      ) : platform.connected ? (
+                        <RefreshCw className="w-4 h-4 mr-1" />
+                      ) : (
+                        <ExternalLink className="w-4 h-4 mr-1" />
+                      )}
+                      {platform.connected ? "同步" : "登录"}
+                    </Button>
+                  )}
+                  {(platform.platform === "视频号" ||
+                    platform.platform === "KILAKILA") && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setImportPlatform(platform.platform);
+                        setImportModalOpen(true);
+                      }}
+                    >
+                      <Upload className="w-4 h-4 mr-1" />
+                      导入
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
-      {/* KPI Cards */}
-      {hasData && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <Card className="border-slate-200 shadow-sm">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                <Eye className="h-3.5 w-3.5" />
-                总播放量
+      {/* 全平台汇总指标 */}
+      <div className="grid grid-cols-5 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                <Play className="w-5 h-5 text-blue-600" />
               </div>
-              <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900">
-                {formatNumber(totalViews)}
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="border-slate-200 shadow-sm">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                <Heart className="h-3.5 w-3.5" />
-                总点赞
+              <div>
+                <p className="text-xs text-slate-500">全平台播放</p>
+                <p className="text-xl font-bold text-slate-900">
+                  {totalViews > 0 ? formatNumber(totalViews) : "-"}
+                </p>
               </div>
-              <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900">
-                {formatNumber(totalLikes)}
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="border-slate-200 shadow-sm">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                <MessageCircle className="h-3.5 w-3.5" />
-                总评论
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center">
+                <Heart className="w-5 h-5 text-red-500" />
               </div>
-              <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900">
-                {formatNumber(totalComments)}
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="border-slate-200 shadow-sm">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                <Share2 className="h-3.5 w-3.5" />
-                总分享
+              <div>
+                <p className="text-xs text-slate-500">全平台点赞</p>
+                <p className="text-xl font-bold text-slate-900">
+                  {totalLikes > 0 ? formatNumber(totalLikes) : "-"}
+                </p>
               </div>
-              <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900">
-                {formatNumber(totalShares)}
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="border-slate-200 shadow-sm">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                <TrendingUp className="h-3.5 w-3.5" />
-                平均互动率
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center">
+                <MessageCircle className="w-5 h-5 text-amber-600" />
               </div>
-              <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900">
-                {avgEngagement.toFixed(1)}%
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+              <div>
+                <p className="text-xs text-slate-500">全平台评论</p>
+                <p className="text-xl font-bold text-slate-900">
+                  {totalComments > 0 ? formatNumber(totalComments) : "-"}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center">
+                <Share2 className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">全平台分享</p>
+                <p className="text-xl font-bold text-slate-900">
+                  {totalShares > 0 ? formatNumber(totalShares) : "-"}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center">
+                <TrendingUp className="w-5 h-5 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">互动率</p>
+                <p className="text-xl font-bold text-slate-900">
+                  {totalViews > 0 ? `${engagementRate}%` : "-"}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
-      {/* Platform Stats & Top Videos */}
-      {hasData && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Platform Breakdown */}
-          <Card className="border-slate-200 shadow-sm">
+      {/* 各平台数据详情 */}
+      <div className="grid grid-cols-3 gap-4">
+        {platforms.map((platform) => (
+          <Card key={platform.platform}>
             <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                <BarChart3 className="h-4 w-4 text-blue-500" />
-                平台数据分布
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <span>{platform.icon}</span>
+                {platform.platform}
+                {platform.summary && (
+                  <span className="text-xs text-slate-400 font-normal">
+                    {platform.summary.videoCount} 条视频
+                  </span>
+                )}
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {platformStats.map((stat) => (
-                  <div
-                    key={stat.platform}
-                    className="rounded-lg border border-slate-100 p-3"
-                  >
-                    <div className="flex items-center justify-between">
-                      <Badge
-                        variant="outline"
-                        className="rounded-full text-xs"
-                      >
-                        {stat.platform}
-                      </Badge>
-                      <span className="text-xs text-slate-400">
-                        {stat.videos} 个视频
+            <CardContent className="space-y-3">
+              {platform.summary ? (
+                <>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">播放</span>
+                      <span className="font-medium">
+                        {formatNumber(platform.summary.totalViews)}
                       </span>
                     </div>
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                      <div>
-                        <span className="text-xs text-slate-400">播放</span>
-                        <p className="font-semibold tabular-nums text-slate-800">
-                          {formatNumber(stat.totalViews)}
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-xs text-slate-400">点赞</span>
-                        <p className="font-semibold tabular-nums text-slate-800">
-                          {formatNumber(stat.totalLikes)}
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-xs text-slate-400">评论</span>
-                        <p className="font-semibold tabular-nums text-slate-800">
-                          {formatNumber(stat.totalComments)}
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-xs text-slate-400">互动率</span>
-                        <p className="font-semibold tabular-nums text-emerald-600">
-                          {stat.avgEngagement}%
-                        </p>
-                      </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">点赞</span>
+                      <span className="font-medium">
+                        {formatNumber(platform.summary.totalLikes)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">评论</span>
+                      <span className="font-medium">
+                        {formatNumber(platform.summary.totalComments)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">分享</span>
+                      <span className="font-medium">
+                        {formatNumber(platform.summary.totalShares)}
+                      </span>
                     </div>
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Top Videos */}
-          <Card className="border-slate-200 shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                <TrendingUp className="h-4 w-4 text-amber-500" />
-                热门视频 TOP 5
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {topVideos.slice(0, 5).map((video, index) => (
-                  <div
-                    key={video.id}
-                    className="flex items-start gap-3 rounded-lg border border-slate-100 p-3"
-                  >
-                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-500">
-                      {index + 1}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-slate-800">
-                        {video.title}
-                      </p>
-                      <div className="mt-1 flex items-center gap-3 text-xs text-slate-400">
-                        <Badge
-                          variant="outline"
-                          className="rounded-full text-[10px]"
-                        >
-                          {video.platform}
-                        </Badge>
-                        <span className="flex items-center gap-0.5">
-                          <Eye className="h-3 w-3" />
-                          {formatNumber(video.views)}
-                        </span>
-                        <span className="flex items-center gap-0.5">
-                          <Heart className="h-3 w-3" />
-                          {formatNumber(video.likes)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Import Dialog */}
-      {showImportDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
-                  <Upload className="h-4 w-4 text-blue-500" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-900">
-                    导入视频数据
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    支持 CSV / JSON 格式
-                  </p>
-                </div>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-slate-400"
-                onClick={() => setShowImportDialog(false)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-
-            <div className="px-6 py-5">
-              {isImporting ? (
-                <div className="flex flex-col items-center justify-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-                  <p className="mt-4 text-sm text-slate-600">正在解析数据...</p>
-                </div>
+                </>
               ) : (
-                <div className="space-y-4">
-                  <div
-                    className="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 py-10 transition-colors hover:border-blue-300 hover:bg-blue-50/30"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Upload className="h-8 w-8 text-slate-300" />
-                    <p className="mt-3 text-sm font-medium text-slate-600">
-                      点击上传文件
-                    </p>
-                    <p className="mt-1 text-xs text-slate-400">
-                      支持 .csv 和 .json 格式
-                    </p>
-                  </div>
-
-                  <div className="rounded-lg bg-slate-50 p-3">
-                    <p className="text-xs font-medium text-slate-600">
-                      CSV 字段映射说明
-                    </p>
-                    <div className="mt-2 space-y-1 text-[11px] text-slate-400">
-                      <p>视频标题 / title / 标题 → 视频名称</p>
-                      <p>平台 / platform → 发布平台</p>
-                      <p>播放量 / views / 播放 → 播放次数</p>
-                      <p>点赞 / likes → 点赞数</p>
-                      <p>评论 / comments → 评论数</p>
-                      <p>分享 / shares → 分享数</p>
-                    </div>
-                  </div>
-
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".csv,.json"
-                    className="hidden"
-                    onChange={handleFileChange}
-                  />
+                <div className="text-center py-4 text-sm text-slate-400">
+                  {platform.platform === "抖音"
+                    ? "请先登录抖音账号"
+                    : "请导入数据"}
                 </div>
               )}
-            </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
-            <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-3">
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs"
-                onClick={() => setShowImportDialog(false)}
-              >
-                取消
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Report Dialog */}
-      {(isGenerating || reportContent) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-50">
-                  <FileText className="h-4 w-4 text-violet-500" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-900">
-                    AI 数据周报
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    Doubao Seed 2.0 Mini · 自动生成运营分析报告
-                  </p>
-                </div>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-slate-400"
-                onClick={() => setReportContent('')}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-
-            <div className="max-h-[480px] overflow-y-auto px-6 py-5">
-              {isGenerating ? (
-                <div className="flex flex-col items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-violet-500" />
-                  <p className="mt-4 text-sm font-medium text-slate-700">
-                    AI 正在生成数据周报...
-                  </p>
-                </div>
-              ) : (
-                <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
-                  {reportContent}
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-3">
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs"
-                onClick={() => setReportContent('')}
-              >
-                关闭
-              </Button>
-              {!isGenerating && reportContent && (
-                <Button
-                  size="sm"
-                  className="gap-1.5 bg-violet-500 text-xs text-white hover:bg-violet-600"
-                  onClick={handleGenerateReport}
+      {/* 热门视频排行 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">热门视频排行（跨平台）</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {topVideos.length > 0 ? (
+            <div className="space-y-3">
+              {topVideos.map((video, idx) => (
+                <div
+                  key={video.id}
+                  className="flex items-center gap-4 p-3 rounded-lg hover:bg-slate-50"
                 >
-                  <RefreshCw className="h-3 w-3" />
-                  重新生成
-                </Button>
+                  <span
+                    className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                      idx < 3
+                        ? "bg-amber-100 text-amber-700"
+                        : "bg-slate-100 text-slate-500"
+                    }`}
+                  >
+                    {idx + 1}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-900 truncate">
+                      {video.title}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {video.platform} · {video.publishDate}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-slate-500">
+                    <span className="flex items-center gap-1">
+                      <Eye className="w-3 h-3" />
+                      {formatNumber(video.views)}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Heart className="w-3 h-3" />
+                      {formatNumber(video.likes)}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <MessageCircle className="w-3 h-3" />
+                      {formatNumber(video.comments)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-sm text-slate-400">
+              暂无视频数据。请连接平台账号或导入数据。
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 数据导入弹窗 */}
+      {importModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl w-full max-w-lg p-6">
+            <h3 className="text-lg font-semibold text-slate-900 mb-4">
+              导入{importPlatform}数据
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm text-slate-600 mb-2 block">
+                  粘贴 JSON 数据
+                </label>
+                <textarea
+                  className="w-full h-40 border border-slate-200 rounded-lg p-3 text-sm font-mono"
+                  placeholder={`[
+  {
+    "title": "视频标题",
+    "publishDate": "2024-01-15",
+    "views": 125000,
+    "likes": 8500,
+    "comments": 420,
+    "shares": 180
+  }
+]`}
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                />
+                <p className="text-xs text-slate-400 mt-1">
+                  支持 JSON 数组格式，字段名支持中文（标题/播放量/点赞/评论/分享）
+                </p>
+              </div>
+              {importError && (
+                <p className="text-sm text-red-500">{importError}</p>
               )}
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setImportModalOpen(false);
+                    setImportText("");
+                    setImportError("");
+                  }}
+                >
+                  取消
+                </Button>
+                <Button onClick={handleImport}>导入</Button>
+              </div>
             </div>
           </div>
         </div>
