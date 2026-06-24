@@ -11,6 +11,9 @@ import {
   Flame,
   Clock,
   User,
+  Sparkles,
+  Loader2,
+  X,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -194,6 +197,10 @@ export default function TopicsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [platformFilter, setPlatformFilter] = useState<string>('all');
+  const [analyzingTopic, setAnalyzingTopic] = useState<Topic | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<string>('');
+  const [analysisModel, setAnalysisModel] = useState<string>('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const filteredTopics = mockTopics.filter((topic) => {
     const matchesSearch = topic.title
@@ -205,6 +212,46 @@ export default function TopicsPage() {
       platformFilter === 'all' || topic.platform === platformFilter;
     return matchesSearch && matchesStatus && matchesPlatform;
   });
+
+  const handleAnalyzeTopic = async (topic: Topic) => {
+    setAnalyzingTopic(topic);
+    setAnalysisResult('');
+    setAnalysisModel('');
+    setIsAnalyzing(true);
+
+    try {
+      const response = await fetch('/api/analyze-topic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topicTitle: topic.title,
+          platform: topic.platform,
+          heatData: `热度 ${topic.heat}，点赞 ${topic.likes}，评论 ${topic.comments}`,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setAnalysisResult(data.data.analysis);
+        setAnalysisModel(data.data.model);
+      } else {
+        setAnalysisResult(`分析失败：${data.error || '未知错误'}`);
+      }
+    } catch (err) {
+      setAnalysisResult(
+        `请求失败：${err instanceof Error ? err.message : '网络错误'}`
+      );
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const closeAnalysis = () => {
+    setAnalyzingTopic(null);
+    setAnalysisResult('');
+    setAnalysisModel('');
+  };
 
   return (
     <div className="space-y-6">
@@ -297,7 +344,7 @@ export default function TopicsPage() {
                   <Clock className="h-3 w-3 text-slate-400" />
                 </div>
               </TableHead>
-              <TableHead className="w-[60px]" />
+              <TableHead className="w-[120px]" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -375,10 +422,13 @@ export default function TopicsPage() {
                     <div className="flex items-center gap-1">
                       <Button
                         variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-slate-400 hover:text-slate-600"
+                        size="sm"
+                        className="h-7 gap-1 px-2 text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                        onClick={() => handleAnalyzeTopic(topic)}
+                        disabled={isAnalyzing}
                       >
-                        <ExternalLink className="h-3.5 w-3.5" />
+                        <Sparkles className="h-3 w-3" />
+                        AI 分析
                       </Button>
                       <Button
                         variant="ghost"
@@ -421,6 +471,91 @@ export default function TopicsPage() {
           </div>
         </div>
       </div>
+
+      {/* AI Analysis Dialog */}
+      {analyzingTopic && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-2xl">
+            {/* Dialog Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50">
+                  <Sparkles className="h-4 w-4 text-amber-500" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    AI 选题分析
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {analyzingTopic.title} · {analyzingTopic.platform}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-slate-400"
+                onClick={closeAnalysis}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Dialog Content */}
+            <div className="max-h-[480px] overflow-y-auto px-6 py-5">
+              {isAnalyzing ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
+                  <p className="mt-4 text-sm font-medium text-slate-700">
+                    AI 正在分析选题价值...
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    使用 Doubao Seed 2.0 Lite · 分析热度因素、受众画像与选题建议
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+                    {analysisResult}
+                  </div>
+                  {analysisModel && (
+                    <div className="mt-4 flex items-center gap-2 border-t border-slate-100 pt-3">
+                      <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                        {analysisModel}
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        热点内容分析模型
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Dialog Footer */}
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-3">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={closeAnalysis}
+              >
+                关闭
+              </Button>
+              {!isAnalyzing && analysisResult && (
+                <Button
+                  size="sm"
+                  className="gap-1.5 bg-amber-500 text-xs text-white hover:bg-amber-600"
+                  onClick={() => handleAnalyzeTopic(analyzingTopic)}
+                >
+                  <Sparkles className="h-3 w-3" />
+                  重新分析
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

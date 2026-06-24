@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import {
   TrendingUp,
   Eye,
@@ -10,6 +11,10 @@ import {
   ArrowDownRight,
   Calendar,
   BarChart3,
+  Sparkles,
+  Loader2,
+  X,
+  FileText,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -127,6 +132,54 @@ function formatNumber(num: number): string {
 
 export default function AnalyticsPage() {
   const maxViews = Math.max(...weeklyData.map((d) => d.views));
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [reportResult, setReportResult] = useState<string>('');
+  const [reportModel, setReportModel] = useState<string>('');
+  const [showReport, setShowReport] = useState(false);
+
+  const handleGenerateReport = async () => {
+    setIsGeneratingReport(true);
+    setReportResult('');
+    setReportModel('');
+    setShowReport(true);
+
+    try {
+      const response = await fetch('/api/data-summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          platform: '全平台（抖音 + 视频号）',
+          period: '最近7天',
+          metrics: {
+            totalViews: 8420000,
+            totalLikes: 510000,
+            totalComments: 44600,
+            totalShares: 25400,
+            videoCount: 156,
+            topVideos: [
+              { title: '一人食快手菜谱：15分钟搞定晚餐', views: 1280000, likes: 89000 },
+              { title: '2024年最值得入手的智能家居设备', views: 980000, likes: 67000 },
+              { title: '新手养猫指南：从选猫到日常护理', views: 750000, likes: 52000 },
+            ],
+          },
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setReportResult(data.data.summary);
+        setReportModel(data.data.model);
+      } else {
+        setReportResult(`生成失败：${data.error || '未知错误'}`);
+      }
+    } catch (err) {
+      setReportResult(
+        `请求失败：${err instanceof Error ? err.message : '网络错误'}`
+      );
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -361,6 +414,69 @@ export default function AnalyticsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* AI Report Dialog */}
+      {showReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50">
+                  <FileText className="h-5 w-5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-900">AI 数据周报</h3>
+                  {reportModel && (
+                    <p className="text-xs text-slate-400">
+                      由 {reportModel} 生成
+                    </p>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={() => setShowReport(false)}
+                className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto px-6 py-5">
+              {isGeneratingReport ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                  <p className="mt-4 text-sm text-slate-500">
+                    正在分析全平台数据，生成周报...
+                  </p>
+                </div>
+              ) : (
+                <div className="prose prose-sm max-w-none text-slate-700">
+                  {reportResult.split('\n').map((line, i) => (
+                    <p key={i} className={line ? 'mb-2' : 'mb-4'}>
+                      {line}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-6 py-4">
+              <button
+                onClick={() => setShowReport(false)}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100"
+              >
+                关闭
+              </button>
+              {!isGeneratingReport && reportResult && (
+                <button
+                  onClick={handleGenerateReport}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                >
+                  重新生成
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

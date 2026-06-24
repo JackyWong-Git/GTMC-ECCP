@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   FileText,
   Sparkles,
@@ -12,9 +12,11 @@ import {
   ChevronRight,
   Wand2,
   RefreshCw,
+  Play,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Card,
   CardContent,
@@ -22,30 +24,47 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface Script {
   id: number;
   topicTitle: string;
+  platform: string;
   status: 'generating' | 'completed' | 'reviewing' | 'approved';
   generatedAt: string;
   wordCount: number;
   outline: string[];
   assignee: string;
+  fullContent?: string;
 }
 
 const mockScripts: Script[] = [
   {
     id: 1,
     topicTitle: '2024年最值得入手的智能家居设备',
-    status: 'generating',
+    platform: '抖音',
+    status: 'completed',
     generatedAt: '2024-12-19 14:30',
-    wordCount: 0,
-    outline: [],
+    wordCount: 1920,
+    outline: [
+      '开场：用一个"回家自动开灯"的场景引入',
+      '第一部分：智能音箱推荐（3款对比）',
+      '第二部分：智能灯光系统（安装教程）',
+      '第三部分：智能安防设备（性价比之选）',
+      '结尾：总结推荐 + 互动引导',
+    ],
     assignee: '张明',
   },
   {
     id: 2,
     topicTitle: '职场新人必看的10个沟通技巧',
+    platform: '视频号',
     status: 'completed',
     generatedAt: '2024-12-19 10:15',
     wordCount: 1850,
@@ -61,6 +80,7 @@ const mockScripts: Script[] = [
   {
     id: 3,
     topicTitle: '一人食快手菜谱：15分钟搞定晚餐',
+    platform: '抖音',
     status: 'reviewing',
     generatedAt: '2024-12-18 16:45',
     wordCount: 2100,
@@ -77,6 +97,7 @@ const mockScripts: Script[] = [
   {
     id: 4,
     topicTitle: '新手养猫指南：从选猫到日常护理',
+    platform: '抖音',
     status: 'approved',
     generatedAt: '2024-12-17 09:20',
     wordCount: 2400,
@@ -127,6 +148,84 @@ export default function ScriptsPage() {
   const [selectedScript, setSelectedScript] = useState<Script | null>(
     mockScripts[1]
   );
+  const [newTopicTitle, setNewTopicTitle] = useState('');
+  const [newPlatform, setNewPlatform] = useState('抖音');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [streamContent, setStreamContent] = useState('');
+  const [streamModel, setStreamModel] = useState('');
+
+  const handleGenerateScript = useCallback(async () => {
+    if (!newTopicTitle.trim()) return;
+
+    setIsGenerating(true);
+    setStreamContent('');
+    setStreamModel('');
+
+    try {
+      const response = await fetch('/api/generate-script', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topicTitle: newTopicTitle,
+          platform: newPlatform,
+          style: '轻松口语化，节奏快，信息密度高',
+          duration: '3-5分钟',
+        }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        setStreamContent(`生成失败：${errData.error || '未知错误'}`);
+        setIsGenerating(false);
+        return;
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        setStreamContent('无法读取流式响应');
+        setIsGenerating(false);
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let fullContent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const text = decoder.decode(value, { stream: true });
+        const lines = text.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.content) {
+                fullContent += data.content;
+                setStreamContent(fullContent);
+              }
+              if (data.done) {
+                setStreamModel(data.model || '');
+              }
+              if (data.error) {
+                fullContent += `\n\n错误：${data.error}`;
+                setStreamContent(fullContent);
+              }
+            } catch {
+              // skip malformed JSON lines
+            }
+          }
+        }
+      }
+    } catch (err) {
+      setStreamContent(
+        `请求失败：${err instanceof Error ? err.message : '网络错误'}`
+      );
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [newTopicTitle, newPlatform]);
 
   return (
     <div className="space-y-6">
@@ -135,14 +234,95 @@ export default function ScriptsPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">脚本工坊</h1>
           <p className="mt-1 text-sm text-slate-500">
-            AI 大模型自动生成脚本大纲 · 减少人工撰写时长
+            Qwen 3.5 Plus 多模态模型 · 流式生成脚本大纲
           </p>
         </div>
-        <Button className="gap-2 bg-violet-600 text-white hover:bg-violet-700">
-          <Wand2 className="h-4 w-4" />
-          批量生成脚本
-        </Button>
       </div>
+
+      {/* Generate New Script */}
+      <Card className="border-violet-200 bg-gradient-to-r from-violet-50/50 to-white">
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <Wand2 className="h-4 w-4 text-violet-500" />
+            <CardTitle className="text-sm font-semibold text-slate-800">
+              生成新脚本
+            </CardTitle>
+          </div>
+          <CardDescription className="text-xs text-slate-400">
+            输入选题名称，AI 将自动生成完整的视频脚本大纲（流式输出）
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-3">
+            <Input
+              placeholder="输入选题名称，例如：2024年最值得入手的数码产品"
+              value={newTopicTitle}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setNewTopicTitle(e.target.value)
+              }
+              className="h-9 flex-1 rounded-lg border-slate-200 text-sm"
+              onKeyDown={(e: React.KeyboardEvent) => {
+                if (e.key === 'Enter' && !isGenerating) {
+                  handleGenerateScript();
+                }
+              }}
+            />
+            <Select value={newPlatform} onValueChange={setNewPlatform}>
+              <SelectTrigger className="h-9 w-[120px] rounded-lg border-slate-200 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="抖音">抖音</SelectItem>
+                <SelectItem value="视频号">视频号</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              className="gap-2 bg-violet-600 text-white hover:bg-violet-700"
+              onClick={handleGenerateScript}
+              disabled={isGenerating || !newTopicTitle.trim()}
+            >
+              {isGenerating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Play className="h-4 w-4" />
+              )}
+              {isGenerating ? '生成中...' : '生成脚本'}
+            </Button>
+          </div>
+
+          {/* Streaming Output */}
+          {(streamContent || isGenerating) && (
+            <div className="mt-4 rounded-lg border border-violet-200 bg-white p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {isGenerating && (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-500" />
+                  )}
+                  <span className="text-xs font-medium text-slate-600">
+                    {isGenerating ? '正在生成...' : '生成完成'}
+                  </span>
+                </div>
+                {streamModel && (
+                  <Badge
+                    variant="secondary"
+                    className="rounded-full bg-violet-50 text-[10px] text-violet-600"
+                  >
+                    {streamModel}
+                  </Badge>
+                )}
+              </div>
+              <div className="max-h-[300px] overflow-y-auto">
+                <pre className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+                  {streamContent}
+                  {isGenerating && (
+                    <span className="inline-block h-4 w-0.5 animate-pulse bg-violet-500" />
+                  )}
+                </pre>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4">
@@ -199,18 +379,13 @@ export default function ScriptsPage() {
                       variant="outline"
                       className={`shrink-0 rounded-full border px-2 py-0 text-[10px] font-medium ${config.color} ${config.bg} ${config.border}`}
                     >
-                      <StatusIcon
-                        className={`mr-1 h-2.5 w-2.5 ${
-                          script.status === 'generating'
-                            ? 'animate-spin'
-                            : ''
-                        }`}
-                      />
+                      <StatusIcon className="mr-1 h-2.5 w-2.5" />
                       {config.label}
                     </Badge>
                   </div>
                   <CardDescription className="text-xs text-slate-400">
-                    {script.assignee} · {script.generatedAt}
+                    {script.platform} · {script.assignee} ·{' '}
+                    {script.generatedAt}
                     {script.wordCount > 0 && ` · ${script.wordCount}字`}
                   </CardDescription>
                 </CardHeader>
@@ -237,7 +412,8 @@ export default function ScriptsPage() {
                       {selectedScript.topicTitle}
                     </CardTitle>
                     <CardDescription className="mt-1 text-xs text-slate-400">
-                      生成时间: {selectedScript.generatedAt} · 负责人:{' '}
+                      {selectedScript.platform} · 生成时间:{' '}
+                      {selectedScript.generatedAt} · 负责人:{' '}
                       {selectedScript.assignee}
                       {selectedScript.wordCount > 0 &&
                         ` · ${selectedScript.wordCount}字`}
@@ -272,78 +448,63 @@ export default function ScriptsPage() {
                 </div>
               </CardHeader>
               <CardContent className="pt-5">
-                {selectedScript.status === 'generating' ? (
-                  <div className="flex flex-col items-center justify-center py-12">
-                    <div className="relative">
-                      <div className="h-12 w-12 rounded-full border-2 border-violet-200" />
-                      <Loader2 className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 animate-spin text-violet-500" />
-                    </div>
-                    <p className="mt-4 text-sm font-medium text-slate-700">
-                      AI 正在生成脚本大纲...
-                    </p>
-                    <p className="mt-1 text-xs text-slate-400">
-                      正在分析选题热度、竞品内容和受众偏好
-                    </p>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-violet-500" />
+                    <h3 className="text-sm font-semibold text-slate-800">
+                      脚本大纲
+                    </h3>
                   </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-violet-500" />
-                      <h3 className="text-sm font-semibold text-slate-800">
-                        脚本大纲
-                      </h3>
-                    </div>
-                    <div className="space-y-2">
-                      {selectedScript.outline.map((item, idx) => (
-                        <div
-                          key={idx}
-                          className="group flex items-start gap-3 rounded-lg border border-slate-100 bg-slate-50/50 p-3 transition-colors hover:bg-slate-50"
-                        >
-                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-violet-100 text-xs font-bold text-violet-600">
-                            {idx + 1}
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-sm text-slate-700">{item}</p>
-                          </div>
-                          <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-300 opacity-0 transition-opacity group-hover:opacity-100" />
+                  <div className="space-y-2">
+                    {selectedScript.outline.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="group flex items-start gap-3 rounded-lg border border-slate-100 bg-slate-50/50 p-3 transition-colors hover:bg-slate-50"
+                      >
+                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-violet-100 text-xs font-bold text-violet-600">
+                          {idx + 1}
                         </div>
-                      ))}
-                    </div>
+                        <div className="flex-1">
+                          <p className="text-sm text-slate-700">{item}</p>
+                        </div>
+                        <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-300 opacity-0 transition-opacity group-hover:opacity-100" />
+                      </div>
+                    ))}
+                  </div>
 
-                    {/* Script Metadata */}
-                    <div className="mt-6 rounded-lg border border-slate-100 bg-slate-50 p-4">
-                      <h4 className="mb-3 text-xs font-semibold text-slate-600">
-                        生成参数
-                      </h4>
-                      <div className="grid grid-cols-2 gap-3 text-xs">
-                        <div>
-                          <span className="text-slate-400">模型:</span>
-                          <span className="ml-2 text-slate-700">
-                            Doubao-pro-256k
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-slate-400">风格:</span>
-                          <span className="ml-2 text-slate-700">
-                            轻松口语化
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-slate-400">时长:</span>
-                          <span className="ml-2 text-slate-700">
-                            3-5分钟
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-slate-400">目标平台:</span>
-                          <span className="ml-2 text-slate-700">
-                            抖音/视频号
-                          </span>
-                        </div>
+                  {/* Script Metadata */}
+                  <div className="mt-6 rounded-lg border border-slate-100 bg-slate-50 p-4">
+                    <h4 className="mb-3 text-xs font-semibold text-slate-600">
+                      生成参数
+                    </h4>
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      <div>
+                        <span className="text-slate-400">模型:</span>
+                        <span className="ml-2 text-slate-700">
+                          Qwen 3.5 Plus
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">风格:</span>
+                        <span className="ml-2 text-slate-700">
+                          轻松口语化
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">时长:</span>
+                        <span className="ml-2 text-slate-700">
+                          3-5分钟
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">目标平台:</span>
+                        <span className="ml-2 text-slate-700">
+                          {selectedScript.platform}
+                        </span>
                       </div>
                     </div>
                   </div>
-                )}
+                </div>
               </CardContent>
             </Card>
           ) : (
