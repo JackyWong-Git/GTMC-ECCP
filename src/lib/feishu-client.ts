@@ -390,3 +390,145 @@ export async function listUserDocs(): Promise<
     url: f.url,
   }));
 }
+
+// ==================== 通讯录 / 团队成员 API ====================
+
+export interface FeishuUser {
+  user_id: string;
+  open_id: string;
+  name: string;
+  en_name: string;
+  email: string;
+  mobile: string;
+  avatar: { avatar_origin: string; avatar_72: string };
+  department_ids: string[];
+  job_title: string;
+  description: string;
+  status: { is_activated: boolean };
+}
+
+/**
+ * 获取当前登录用户的详细信息
+ */
+export async function getCurrentUser(): Promise<{
+  user_id: string;
+  name: string;
+  email: string;
+  avatar_url: string;
+  department_ids: string[];
+  job_title: string;
+}> {
+  const token = await getValidToken();
+  const data = (await feishuFetch("/contact/v3/users/me", token)) as {
+    user: FeishuUser;
+  };
+  const user = data.user;
+  return {
+    user_id: user.user_id || user.open_id,
+    name: user.name,
+    email: user.email || "",
+    avatar_url: user.avatar?.avatar_origin || user.avatar?.avatar_72 || "",
+    department_ids: user.department_ids || [],
+    job_title: user.job_title || "",
+  };
+}
+
+/**
+ * 获取部门列表
+ */
+export async function listDepartments(
+  departmentId = "0"
+): Promise<{ department_id: string; name: string; parent_department_id: string }[]> {
+  const token = await getValidToken();
+  const data = (await feishuFetch(
+    `/contact/v3/departments?parent_department_id=${departmentId}&page_size=50`,
+    token
+  )) as {
+    items: { department_id: string; name: string; parent_department_id: string }[];
+  };
+  return data.items || [];
+}
+
+/**
+ * 获取部门下的成员列表
+ */
+export async function listDepartmentUsers(
+  departmentId: string
+): Promise<FeishuUser[]> {
+  const token = await getValidToken();
+  const data = (await feishuFetch(
+    `/contact/v3/users/find_by_department?department_id=${departmentId}&page_size=50`,
+    token
+  )) as { items: FeishuUser[] };
+  return data.items || [];
+}
+
+/**
+ * 获取团队成员列表（综合：当前用户 + 同部门成员）
+ */
+export async function getTeamMembers(): Promise<{
+  currentUser: {
+    user_id: string;
+    name: string;
+    email: string;
+    avatar_url: string;
+    job_title: string;
+    department_ids: string[];
+  };
+  members: {
+    user_id: string;
+    name: string;
+    email: string;
+    avatar_url: string;
+    job_title: string;
+    mobile: string;
+    is_active: boolean;
+  }[];
+  departments: {
+    department_id: string;
+    name: string;
+  }[];
+}> {
+  // 1. 获取当前用户
+  const currentUser = await getCurrentUser();
+
+  // 2. 获取部门列表
+  const departments = await listDepartments();
+
+  // 3. 获取当前用户所在部门的成员
+  const memberSet = new Map<string, FeishuUser>();
+  if (currentUser.department_ids.length > 0) {
+    for (const deptId of currentUser.department_ids.slice(0, 3)) {
+      try {
+        const deptUsers = await listDepartmentUsers(deptId);
+        for (const user of deptUsers) {
+          const id = user.user_id || user.open_id;
+          if (!memberSet.has(id)) {
+            memberSet.set(id, user);
+          }
+        }
+      } catch {
+        // 某些部门可能无权限访问，跳过
+      }
+    }
+  }
+
+  const members = Array.from(memberSet.values()).map((u) => ({
+    user_id: u.user_id || u.open_id,
+    name: u.name,
+    email: u.email || "",
+    avatar_url: u.avatar?.avatar_origin || u.avatar?.avatar_72 || "",
+    job_title: u.job_title || "",
+    mobile: u.mobile || "",
+    is_active: u.status?.is_activated ?? true,
+  }));
+
+  return {
+    currentUser,
+    members,
+    departments: departments.map((d) => ({
+      department_id: d.department_id,
+      name: d.name,
+    })),
+  };
+}

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect, useCallback } from 'react';
 import {
   Users,
   Bot,
@@ -12,6 +13,10 @@ import {
   UserPlus,
   Shield,
   Activity,
+  RefreshCw,
+  Link2,
+  Mail,
+  Phone,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,151 +29,144 @@ import {
 } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
-const teamMembers = [
-  {
-    name: '张明',
-    role: '内容策划',
-    avatar: '张',
-    tasks: 12,
-    completed: 8,
-    status: 'online',
-    color: 'bg-blue-500',
-  },
-  {
-    name: '李婷',
-    role: '脚本编辑',
-    avatar: '李',
-    tasks: 9,
-    completed: 7,
-    status: 'online',
-    color: 'bg-violet-500',
-  },
-  {
-    name: '王浩',
-    role: '视频制作',
-    avatar: '王',
-    tasks: 15,
-    completed: 11,
-    status: 'offline',
-    color: 'bg-emerald-500',
-  },
-  {
-    name: '赵雪',
-    role: '数据分析',
-    avatar: '赵',
-    tasks: 6,
-    completed: 5,
-    status: 'online',
-    color: 'bg-amber-500',
-  },
+interface FeishuMember {
+  user_id: string;
+  name: string;
+  email: string;
+  avatar_url: string;
+  job_title: string;
+  mobile: string;
+  is_active: boolean;
+}
+
+interface FeishuCurrentUser {
+  user_id: string;
+  name: string;
+  email: string;
+  avatar_url: string;
+  job_title: string;
+  department_ids: string[];
+}
+
+interface FeishuDepartment {
+  department_id: string;
+  name: string;
+}
+
+const AVATAR_COLORS = [
+  'bg-blue-500',
+  'bg-violet-500',
+  'bg-emerald-500',
+  'bg-amber-500',
+  'bg-pink-500',
+  'bg-indigo-500',
+  'bg-teal-500',
+  'bg-rose-500',
 ];
+
+function getAvatarColor(index: number): string {
+  return AVATAR_COLORS[index % AVATAR_COLORS.length];
+}
 
 const botCommands = [
   {
     command: '/抓取热点',
     description: '手动触发热点抓取工作流',
-    usage: '今日 3 次',
+    usage: '在飞书群中发送即可触发',
   },
   {
     command: '/生成脚本 [选题名]',
     description: '为指定选题生成脚本大纲',
-    usage: '今日 5 次',
+    usage: '在飞书群中发送即可触发',
   },
   {
     command: '/数据报告',
     description: '获取最新数据汇总报告',
-    usage: '今日 2 次',
+    usage: '在飞书群中发送即可触发',
   },
   {
     command: '/任务分配 [成员] [选题]',
     description: '将选题分配给指定成员',
-    usage: '今日 4 次',
+    usage: '在飞书群中发送即可触发',
   },
   {
     command: '/状态查询',
     description: '查看所有工作流运行状态',
-    usage: '今日 8 次',
+    usage: '在飞书群中发送即可触发',
   },
   {
     command: '/发布提醒',
     description: '查看今日待发布视频列表',
-    usage: '今日 1 次',
+    usage: '在飞书群中发送即可触发',
   },
 ];
 
 const scheduledTasks = [
-  {
-    time: '08:00',
-    task: '自动抓取抖音/视频号热点',
-    type: '自动',
-    status: 'completed',
-  },
-  {
-    time: '10:00',
-    task: '热点分析报告推送到运营群',
-    type: '自动',
-    status: 'completed',
-  },
-  {
-    time: '12:00',
-    task: '数据回收 — 上午发布视频数据',
-    type: '自动',
-    status: 'completed',
-  },
-  {
-    time: '14:00',
-    task: '脚本生成 — 新选题批量处理',
-    type: '手动',
-    status: 'pending',
-  },
-  {
-    time: '16:00',
-    task: '热点抓取 — 下午轮次',
-    type: '自动',
-    status: 'pending',
-  },
-  {
-    time: '18:00',
-    task: '数据回收 — 全天数据汇总',
-    type: '自动',
-    status: 'pending',
-  },
-  {
-    time: '20:00',
-    task: '日报生成 — 推送到飞书群',
-    type: '自动',
-    status: 'pending',
-  },
+  { time: '08:00', task: '自动抓取抖音/视频号热点', type: '自动', status: 'pending' },
+  { time: '10:00', task: '热点分析报告推送到运营群', type: '自动', status: 'pending' },
+  { time: '12:00', task: '数据回收 — 上午发布视频数据', type: '自动', status: 'pending' },
+  { time: '14:00', task: '脚本生成 — 新选题批量处理', type: '手动', status: 'pending' },
+  { time: '16:00', task: '热点抓取 — 下午轮次', type: '自动', status: 'pending' },
+  { time: '18:00', task: '数据回收 — 全天数据汇总', type: '自动', status: 'pending' },
+  { time: '20:00', task: '日报生成 — 推送到飞书群', type: '自动', status: 'pending' },
 ];
 
 const manualTasks = [
-  {
-    title: '视频拍摄与剪辑',
-    description: '根据脚本大纲完成视频制作',
-    responsible: '王浩',
-    icon: '🎬',
-  },
-  {
-    title: '多平台手动发布',
-    description: '将成品视频发布到抖音、视频号等平台',
-    responsible: '张明',
-    icon: '📤',
-  },
-  {
-    title: '内容终审',
-    description: '发布前最终审核，确保内容质量',
-    responsible: '李婷',
-    icon: '✅',
-  },
-  {
-    title: '评论互动管理',
-    description: '回复用户评论，维护社区氛围',
-    responsible: '赵雪',
-    icon: '💬',
-  },
+  { title: '视频拍摄与剪辑', description: '根据脚本大纲完成视频制作', icon: '🎬' },
+  { title: '多平台手动发布', description: '将成品视频发布到抖音、视频号等平台', icon: '📤' },
+  { title: '内容终审', description: '发布前最终审核，确保内容质量', icon: '✅' },
+  { title: '评论互动管理', description: '回复用户评论，维护社区氛围', icon: '💬' },
 ];
 
 export default function TeamPage() {
+  const [currentUser, setCurrentUser] = useState<FeishuCurrentUser | null>(null);
+  const [members, setMembers] = useState<FeishuMember[]>([]);
+  const [departments, setDepartments] = useState<FeishuDepartment[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [feishuConnected, setFeishuConnected] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // 检查飞书连接状态
+  const checkStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/feishu/status');
+      const data = await res.json();
+      if (data.success && data.data.connected) {
+        setFeishuConnected(true);
+        setCurrentUser(data.data.user);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // 同步飞书通讯录
+  const syncContacts = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/feishu/sync/contacts');
+      const data = await res.json();
+      if (data.success) {
+        setCurrentUser(data.data.currentUser);
+        setMembers(data.data.members);
+        setDepartments(data.data.departments);
+      } else {
+        setError(data.error || '同步失败');
+      }
+    } catch {
+      setError('网络错误，请稍后重试');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkStatus();
+  }, [checkStatus]);
+
+  const activeMembers = members.filter((m) => m.is_active);
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -176,7 +174,7 @@ export default function TeamPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">团队协作</h1>
           <p className="mt-1 text-sm text-slate-500">
-            飞书 Bot 集成 · 任务调度 · 人工操作管理
+            飞书通讯录同步 · Bot 指令 · 任务调度 · 人工操作管理
           </p>
         </div>
         <div className="flex gap-2">
@@ -184,16 +182,79 @@ export default function TeamPage() {
             variant="outline"
             size="sm"
             className="gap-2 text-xs"
+            onClick={() => (window.location.href = '/settings')}
           >
             <Settings className="h-3.5 w-3.5" />
-            Bot 配置
+            飞书集成
           </Button>
-          <Button className="gap-2 bg-[#0F172A] text-white hover:bg-slate-800">
-            <UserPlus className="h-4 w-4" />
-            邀请成员
-          </Button>
+          {feishuConnected ? (
+            <Button
+              className="gap-2 bg-[#0F172A] text-white hover:bg-slate-800"
+              onClick={syncContacts}
+              disabled={loading}
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              {loading ? '同步中...' : '同步通讯录'}
+            </Button>
+          ) : (
+            <Button
+              className="gap-2 bg-[#0F172A] text-white hover:bg-slate-800"
+              onClick={() => (window.location.href = '/settings')}
+            >
+              <Link2 className="h-4 w-4" />
+              连接飞书账号
+            </Button>
+          )}
         </div>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+          <p className="text-sm text-red-700">{error}</p>
+          <p className="mt-1 text-xs text-red-500">
+            请确保已在「飞书集成」页面连接账号，并开通了通讯录读取权限。
+          </p>
+        </div>
+      )}
+
+      {/* Current User */}
+      {currentUser && (
+        <Card className="border-slate-200 bg-white">
+          <CardContent className="flex items-center gap-4 p-4">
+            <Avatar className="h-12 w-12">
+              {currentUser.avatar_url ? (
+                <img
+                  src={currentUser.avatar_url}
+                  alt={currentUser.name}
+                  className="h-full w-full rounded-full object-cover"
+                />
+              ) : (
+                <AvatarFallback className="bg-[#0F172A] text-sm font-medium text-white">
+                  {currentUser.name?.charAt(0) || '?'}
+                </AvatarFallback>
+              )}
+            </Avatar>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold text-slate-800">
+                  {currentUser.name}
+                </p>
+                <Badge className="rounded-full bg-emerald-100 text-[10px] text-emerald-700">
+                  当前登录
+                </Badge>
+              </div>
+              <p className="text-xs text-slate-400">
+                {currentUser.job_title || '未设置职位'}
+                {currentUser.email && ` · ${currentUser.email}`}
+              </p>
+            </div>
+            <div className="text-right text-xs text-slate-400">
+              <p>部门数: {currentUser.department_ids?.length || 0}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Team Members */}
       <Card className="border-slate-200 bg-white">
@@ -202,65 +263,111 @@ export default function TeamPage() {
             <CardTitle className="text-sm font-semibold text-slate-800">
               团队成员
             </CardTitle>
-            <Badge
-              variant="secondary"
-              className="rounded-full bg-slate-100 text-xs text-slate-600"
-            >
-              {teamMembers.filter((m) => m.status === 'online').length}/
-              {teamMembers.length} 在线
-            </Badge>
+            <div className="flex items-center gap-2">
+              {departments.length > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="rounded-full bg-indigo-50 text-[10px] text-indigo-600"
+                >
+                  {departments.length} 个部门
+                </Badge>
+              )}
+              <Badge
+                variant="secondary"
+                className="rounded-full bg-slate-100 text-xs text-slate-600"
+              >
+                {activeMembers.length}/{members.length} 在线
+              </Badge>
+            </div>
           </div>
+          <CardDescription className="text-xs text-slate-400">
+            {feishuConnected
+              ? '点击「同步通讯录」从飞书获取团队成员信息'
+              : '请先连接飞书账号以同步团队成员'}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {teamMembers.map((member) => (
-              <div
-                key={member.name}
-                className="rounded-lg border border-slate-200 p-4 transition-colors hover:bg-slate-50"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <Avatar className="h-10 w-10">
-                      <AvatarFallback
-                        className={`${member.color} text-sm font-medium text-white`}
-                      >
-                        {member.avatar}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span
-                      className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${
-                        member.status === 'online'
-                          ? 'bg-emerald-500'
-                          : 'bg-slate-300'
-                      }`}
-                    />
+          {members.length > 0 ? (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+              {members.map((member, idx) => (
+                <div
+                  key={member.user_id}
+                  className="rounded-lg border border-slate-200 p-4 transition-colors hover:bg-slate-50"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <Avatar className="h-10 w-10">
+                        {member.avatar_url ? (
+                          <img
+                            src={member.avatar_url}
+                            alt={member.name}
+                            className="h-full w-full rounded-full object-cover"
+                          />
+                        ) : (
+                          <AvatarFallback
+                            className={`${getAvatarColor(idx)} text-sm font-medium text-white`}
+                          >
+                            {member.name?.charAt(0) || '?'}
+                          </AvatarFallback>
+                        )}
+                      </Avatar>
+                      <span
+                        className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white ${
+                          member.is_active ? 'bg-emerald-500' : 'bg-slate-300'
+                        }`}
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-slate-800">
+                        {member.name}
+                      </p>
+                      <p className="truncate text-xs text-slate-400">
+                        {member.job_title || '未设置职位'}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-slate-800">
-                      {member.name}
-                    </p>
-                    <p className="text-xs text-slate-400">{member.role}</p>
+                  <div className="mt-3 space-y-1.5 border-t border-slate-100 pt-3">
+                    {member.email && (
+                      <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                        <Mail className="h-3 w-3" />
+                        <span className="truncate">{member.email}</span>
+                      </div>
+                    )}
+                    {member.mobile && (
+                      <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                        <Phone className="h-3 w-3" />
+                        <span>{member.mobile}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3">
-                  <div className="text-xs text-slate-400">
-                    任务进度
-                  </div>
-                  <div className="text-xs font-medium text-slate-700">
-                    {member.completed}/{member.tasks}
-                  </div>
-                </div>
-                <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                  <div
-                    className={`h-full rounded-full ${member.color}`}
-                    style={{
-                      width: `${(member.completed / member.tasks) * 100}%`,
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Users className="mb-3 h-10 w-10 text-slate-200" />
+              <p className="text-sm font-medium text-slate-500">
+                {feishuConnected ? '尚未同步团队成员' : '请先连接飞书账号'}
+              </p>
+              <p className="mt-1 text-xs text-slate-400">
+                {feishuConnected
+                  ? '点击右上角「同步通讯录」获取飞书组织中的团队成员'
+                  : '连接飞书账号后，可自动同步组织通讯录中的成员信息'}
+              </p>
+              {feishuConnected && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-4 gap-2"
+                  onClick={syncContacts}
+                  disabled={loading}
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+                  同步通讯录
+                </Button>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -314,7 +421,7 @@ export default function TeamPage() {
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4 text-blue-600" />
               <CardTitle className="text-sm font-semibold text-slate-800">
-                今日调度计划
+                每日调度计划
               </CardTitle>
             </div>
             <CardDescription className="text-xs text-slate-400">
@@ -347,11 +454,7 @@ export default function TeamPage() {
                   >
                     {task.type}
                   </Badge>
-                  {task.status === 'completed' ? (
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                  ) : (
-                    <Clock className="h-3.5 w-3.5 text-slate-300" />
-                  )}
+                  <Clock className="h-3.5 w-3.5 text-slate-300" />
                 </div>
               ))}
             </div>
@@ -388,12 +491,6 @@ export default function TeamPage() {
                 <p className="mt-2 text-xs text-slate-500">
                   {task.description}
                 </p>
-                <div className="mt-3 flex items-center gap-2 border-t border-amber-200/50 pt-3">
-                  <Users className="h-3 w-3 text-slate-400" />
-                  <span className="text-xs text-slate-500">
-                    负责人: {task.responsible}
-                  </span>
-                </div>
               </div>
             ))}
           </div>
