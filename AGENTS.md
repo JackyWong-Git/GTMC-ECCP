@@ -8,25 +8,42 @@
 - **UI 组件**: shadcn/ui (基于 Radix UI)
 - **Styling**: Tailwind CSS 4
 
+## 项目概述
+
+基于 Coze 和飞书的自动化运营工作流管理平台，实现选题策划、脚本生成、数据汇总与团队协作的全流程自动化管理。
+
 ## 目录结构
 
 ```
-├── public/                 # 静态资源
-├── scripts/                # 构建与启动脚本
-│   ├── build.sh            # 构建脚本
-│   ├── dev.sh              # 开发环境启动脚本
-│   ├── prepare.sh          # 预处理脚本
-│   └── start.sh            # 生产环境启动脚本
+├── public/                       # 静态资源
+├── scripts/                      # 构建与启动脚本
+│   ├── build.sh                  # 构建脚本
+│   ├── dev.sh                    # 开发环境启动脚本
+│   ├── prepare.sh                # 预处理脚本
+│   └── start.sh                  # 生产环境启动脚本
 ├── src/
-│   ├── app/                # 页面路由与布局
-│   ├── components/ui/      # Shadcn UI 组件库
-│   ├── hooks/              # 自定义 Hooks
-│   ├── lib/                # 工具库
-│   │   └── utils.ts        # 通用工具函数 (cn)
-│   └── server.ts           # 自定义服务端入口
-├── next.config.ts          # Next.js 配置
-├── package.json            # 项目依赖管理
-└── tsconfig.json           # TypeScript 配置
+│   ├── app/                      # 页面路由与布局
+│   │   ├── layout.tsx            # 根布局（侧边栏 + 顶栏）
+│   │   ├── page.tsx              # 运营总览（Dashboard）
+│   │   ├── globals.css           # 全局样式
+│   │   ├── topics/page.tsx       # 选题池（多维表视图）
+│   │   ├── scripts/page.tsx      # 脚本工坊（AI脚本生成）
+│   │   ├── analytics/page.tsx    # 数据看板（播放/点赞/评论）
+│   │   ├── workflows/page.tsx    # 工作流管理（Coze工作流监控）
+│   │   └── team/page.tsx         # 团队协作（飞书Bot集成）
+│   ├── components/
+│   │   ├── layout/               # 布局组件
+│   │   │   ├── sidebar.tsx       # 侧边栏导航
+│   │   │   └── header.tsx        # 顶部导航栏
+│   │   └── ui/                   # Shadcn UI 组件库
+│   ├── hooks/                    # 自定义 Hooks
+│   ├── lib/                      # 工具库
+│   │   └── utils.ts              # 通用工具函数 (cn)
+│   └── server.ts                 # 自定义服务端入口
+├── DESIGN.md                     # 设计规范文件
+├── next.config.ts                # Next.js 配置
+├── package.json                  # 项目依赖管理
+└── tsconfig.json                 # TypeScript 配置
 ```
 
 - 项目文件（如 app 目录、pages 目录、components 等）默认初始化到 `src/` 目录下。
