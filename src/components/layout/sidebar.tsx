@@ -12,6 +12,7 @@ import {
   Zap,
   ChevronLeft,
   ChevronRight,
+  Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
@@ -23,6 +24,7 @@ const navItems = [
   { href: '/analytics', label: '数据看板', icon: BarChart3 },
   { href: '/workflows', label: '工作流', icon: Workflow },
   { href: '/team', label: '团队协作', icon: Users },
+  { href: '/settings', label: '飞书集成', icon: Settings },
 ];
 
 export function Sidebar() {
