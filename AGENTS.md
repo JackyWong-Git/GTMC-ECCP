@@ -30,15 +30,20 @@
 │   │   ├── scripts/page.tsx      # 脚本工坊（AI脚本生成）
 │   │   ├── analytics/page.tsx    # 数据看板（播放/点赞/评论）
 │   │   ├── workflows/page.tsx    # 工作流管理（Coze工作流监控）
-│   │   └── team/page.tsx         # 团队协作（飞书Bot集成）
+│   │   ├── team/page.tsx         # 团队协作（飞书Bot集成）
+│   │   └── api/                  # API 路由
+│   │       ├── analyze-topic/route.ts   # 选题热度分析（doubao-seed-2-0-lite）
+│   │       ├── generate-script/route.ts # 脚本大纲生成（qwen-3-5-plus，流式SSE）
+│   │       └── data-summary/route.ts    # 数据周报生成（doubao-seed-2-0-mini）
 │   ├── components/
 │   │   ├── layout/               # 布局组件
 │   │   │   ├── sidebar.tsx       # 侧边栏导航
 │   │   │   └── header.tsx        # 顶部导航栏
-│   │   └── ui/                   # Shadcn UI 组件库
+│   │   └── ui/                   # Shadcn UI 组件库（仅保留已使用组件）
 │   ├── hooks/                    # 自定义 Hooks
 │   ├── lib/                      # 工具库
-│   │   └── utils.ts              # 通用工具函数 (cn)
+│   │   ├── utils.ts              # 通用工具函数 (cn)
+│   │   └── llm-config.ts         # LLM 多模型配置常量
 │   └── server.ts                 # 自定义服务端入口
 ├── DESIGN.md                     # 设计规范文件
 ├── next.config.ts                # Next.js 配置
