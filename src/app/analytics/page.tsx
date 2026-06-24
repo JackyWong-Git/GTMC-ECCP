@@ -1,20 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   TrendingUp,
   Eye,
   Heart,
   MessageCircle,
   Share2,
-  ArrowUpRight,
-  ArrowDownRight,
   Calendar,
   BarChart3,
   Sparkles,
   Loader2,
   X,
   FileText,
+  Upload,
+  Inbox,
+  RefreshCw,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -32,154 +33,177 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-const platformStats = [
-  {
-    platform: '抖音',
-    videos: 89,
-    totalViews: 5240000,
-    totalLikes: 312000,
-    totalComments: 28400,
-    totalShares: 15600,
-    avgEngagement: 6.8,
-    trend: 'up',
-  },
-  {
-    platform: '视频号',
-    videos: 67,
-    totalViews: 3180000,
-    totalLikes: 198000,
-    totalComments: 16200,
-    totalShares: 9800,
-    avgEngagement: 7.1,
-    trend: 'up',
-  },
-];
+interface PlatformStat {
+  platform: string;
+  videos: number;
+  totalViews: number;
+  totalLikes: number;
+  totalComments: number;
+  totalShares: number;
+  avgEngagement: number;
+  trend: string;
+}
 
-const topVideos = [
-  {
-    id: 1,
-    title: '一人食快手菜谱：15分钟搞定晚餐',
-    platform: '抖音',
-    views: 1280000,
-    likes: 89000,
-    comments: 4200,
-    shares: 3100,
-    publishDate: '2024-12-18',
-    engagement: 7.5,
-  },
-  {
-    id: 2,
-    title: '2024年最值得入手的智能家居设备',
-    platform: '抖音',
-    views: 980000,
-    likes: 67000,
-    comments: 3800,
-    shares: 2400,
-    publishDate: '2024-12-15',
-    engagement: 7.4,
-  },
-  {
-    id: 3,
-    title: '新手养猫指南：从选猫到日常护理',
-    platform: '视频号',
-    views: 750000,
-    likes: 52000,
-    comments: 2900,
-    shares: 1800,
-    publishDate: '2024-12-12',
-    engagement: 7.5,
-  },
-  {
-    id: 4,
-    title: '周末露营装备清单分享',
-    platform: '抖音',
-    views: 620000,
-    likes: 41000,
-    comments: 2100,
-    shares: 1500,
-    publishDate: '2024-12-10',
-    engagement: 7.1,
-  },
-  {
-    id: 5,
-    title: '职场新人必看的10个沟通技巧',
-    platform: '视频号',
-    views: 540000,
-    likes: 38000,
-    comments: 1800,
-    shares: 1200,
-    publishDate: '2024-12-08',
-    engagement: 7.6,
-  },
-];
-
-const weeklyData = [
-  { day: '周一', views: 120000, likes: 8500, comments: 620 },
-  { day: '周二', views: 98000, likes: 7200, comments: 480 },
-  { day: '周三', views: 156000, likes: 11000, comments: 890 },
-  { day: '周四', views: 134000, likes: 9800, comments: 720 },
-  { day: '周五', views: 189000, likes: 14200, comments: 1100 },
-  { day: '周六', views: 245000, likes: 18500, comments: 1450 },
-  { day: '周日', views: 210000, likes: 15800, comments: 1200 },
-];
+interface VideoData {
+  id: number;
+  title: string;
+  platform: string;
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  publishDate: string;
+  engagement: number;
+}
 
 function formatNumber(num: number): string {
   if (num >= 10000) {
-    return (num / 10000).toFixed(1) + 'w';
+    return `${(num / 10000).toFixed(1)}w`;
   }
   return num.toLocaleString();
 }
 
 export default function AnalyticsPage() {
-  const maxViews = Math.max(...weeklyData.map((d) => d.views));
-  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
-  const [reportResult, setReportResult] = useState<string>('');
-  const [reportModel, setReportModel] = useState<string>('');
-  const [showReport, setShowReport] = useState(false);
+  const [platformStats, setPlatformStats] = useState<PlatformStat[]>([]);
+  const [topVideos, setTopVideos] = useState<VideoData[]>([]);
+  const [timeRange, setTimeRange] = useState('7d');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [reportContent, setReportContent] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const totalViews = platformStats.reduce((sum, p) => sum + p.totalViews, 0);
+  const totalLikes = platformStats.reduce((sum, p) => sum + p.totalLikes, 0);
+  const totalComments = platformStats.reduce((sum, p) => sum + p.totalComments, 0);
+  const totalShares = platformStats.reduce((sum, p) => sum + p.totalShares, 0);
+  const avgEngagement =
+    platformStats.length > 0
+      ? platformStats.reduce((sum, p) => sum + p.avgEngagement, 0) / platformStats.length
+      : 0;
 
   const handleGenerateReport = async () => {
-    setIsGeneratingReport(true);
-    setReportResult('');
-    setReportModel('');
-    setShowReport(true);
+    setIsGenerating(true);
+    setReportContent('');
 
     try {
       const response = await fetch('/api/data-summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          platform: '全平台（抖音 + 视频号）',
-          period: '最近7天',
+          platform: '全平台',
+          period: timeRange === '7d' ? '最近7天' : timeRange === '30d' ? '最近30天' : '最近90天',
           metrics: {
-            totalViews: 8420000,
-            totalLikes: 510000,
-            totalComments: 44600,
-            totalShares: 25400,
-            videoCount: 156,
-            topVideos: [
-              { title: '一人食快手菜谱：15分钟搞定晚餐', views: 1280000, likes: 89000 },
-              { title: '2024年最值得入手的智能家居设备', views: 980000, likes: 67000 },
-              { title: '新手养猫指南：从选猫到日常护理', views: 750000, likes: 52000 },
-            ],
+            totalViews,
+            totalLikes,
+            totalComments,
+            totalShares,
+            videoCount: platformStats.reduce((sum, p) => sum + p.videos, 0),
           },
+          topVideos: topVideos.slice(0, 5).map((v) => ({
+            title: v.title,
+            platform: v.platform,
+            views: v.views,
+            likes: v.likes,
+            engagement: v.engagement,
+          })),
         }),
       });
 
       const data = await response.json();
       if (data.success) {
-        setReportResult(data.data.summary);
-        setReportModel(data.data.model);
-      } else {
-        setReportResult(`生成失败：${data.error || '未知错误'}`);
+        setReportContent(data.data.summary);
       }
     } catch (err) {
-      setReportResult(
-        `请求失败：${err instanceof Error ? err.message : '网络错误'}`
-      );
+      console.error('生成报告失败:', err);
     } finally {
-      setIsGeneratingReport(false);
+      setIsGenerating(false);
     }
   };
+
+  const handleImportFile = async (file: File) => {
+    setIsImporting(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/api/import-data', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.data.rows) {
+        // 解析导入的数据为视频数据
+        const importedVideos: VideoData[] = data.data.rows.map(
+          (row: Record<string, string | number | boolean | null>, index: number) => ({
+            id: Date.now() + index,
+            title: String(row['视频标题'] || row['title'] || row['标题'] || `视频 ${index + 1}`),
+            platform: String(row['平台'] || row['platform'] || '未知'),
+            views: Number(row['播放量'] || row['views'] || row['播放'] || 0),
+            likes: Number(row['点赞'] || row['likes'] || 0),
+            comments: Number(row['评论'] || row['comments'] || 0),
+            shares: Number(row['分享'] || row['shares'] || 0),
+            publishDate: String(row['发布日期'] || row['publishDate'] || new Date().toISOString().split('T')[0]),
+            engagement: Number(row['互动率'] || row['engagement'] || 0),
+          })
+        );
+
+        setTopVideos(importedVideos);
+
+        // 按平台汇总
+        const platformMap = new Map<string, PlatformStat>();
+        importedVideos.forEach((video) => {
+          const existing = platformMap.get(video.platform);
+          if (existing) {
+            existing.videos += 1;
+            existing.totalViews += video.views;
+            existing.totalLikes += video.likes;
+            existing.totalComments += video.comments;
+            existing.totalShares += video.shares;
+          } else {
+            platformMap.set(video.platform, {
+              platform: video.platform,
+              videos: 1,
+              totalViews: video.views,
+              totalLikes: video.likes,
+              totalComments: video.comments,
+              totalShares: video.shares,
+              avgEngagement: 0,
+              trend: 'stable',
+            });
+          }
+        });
+
+        // 计算平均互动率
+        platformMap.forEach((stat) => {
+          stat.avgEngagement = stat.totalViews > 0
+            ? Number((((stat.totalLikes + stat.totalComments) / stat.totalViews) * 100).toFixed(1))
+            : 0;
+        });
+
+        setPlatformStats(Array.from(platformMap.values()));
+        setShowImportDialog(false);
+      }
+    } catch (err) {
+      console.error('导入数据失败:', err);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleImportFile(file);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const hasData = platformStats.length > 0;
 
   return (
     <div className="space-y-6">
@@ -188,290 +212,389 @@ export default function AnalyticsPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">数据看板</h1>
           <p className="mt-1 text-sm text-slate-500">
-            全平台数据汇总 · 自动回收播放/点赞/评论数据
+            {hasData
+              ? `全平台数据汇总 · ${platformStats.reduce((sum, p) => sum + p.videos, 0)} 个视频`
+              : '导入视频数据查看分析看板'}
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Select defaultValue="7d">
-            <SelectTrigger className="h-9 w-[140px] rounded-lg border-slate-200 text-sm">
+        <div className="flex items-center gap-2">
+          <Select value={timeRange} onValueChange={setTimeRange}>
+            <SelectTrigger className="h-9 w-[130px] rounded-lg border-slate-200 text-sm">
               <Calendar className="mr-2 h-3.5 w-3.5 text-slate-400" />
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="7d">最近7天</SelectItem>
-              <SelectItem value="30d">最近30天</SelectItem>
-              <SelectItem value="90d">最近90天</SelectItem>
+              <SelectItem value="7d">最近 7 天</SelectItem>
+              <SelectItem value="30d">最近 30 天</SelectItem>
+              <SelectItem value="90d">最近 90 天</SelectItem>
             </SelectContent>
           </Select>
           <Button
             variant="outline"
             size="sm"
-            className="gap-2 text-xs"
+            className="gap-1.5 text-xs"
+            onClick={() => setShowImportDialog(true)}
           >
-            <BarChart3 className="h-3.5 w-3.5" />
-            导出报告
+            <Upload className="h-3.5 w-3.5" />
+            导入数据
           </Button>
+          {hasData && (
+            <Button
+              className="gap-2 bg-[#0F172A] text-white hover:bg-slate-800"
+              onClick={handleGenerateReport}
+              disabled={isGenerating}
+            >
+              {isGenerating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              {isGenerating ? '生成中...' : 'AI 生成周报'}
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Platform Overview */}
-      <div className="grid grid-cols-2 gap-4">
-        {platformStats.map((platform) => (
-          <Card
-            key={platform.platform}
-            className="border-slate-200 bg-white"
+      {/* Empty State */}
+      {!hasData && (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white py-20">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-50">
+            <BarChart3 className="h-8 w-8 text-slate-300" />
+          </div>
+          <h3 className="mt-4 text-base font-semibold text-slate-700">
+            暂无数据
+          </h3>
+          <p className="mt-1.5 max-w-sm text-center text-sm text-slate-400">
+            导入视频数据（CSV/JSON）后，这里将展示播放量、点赞、评论等全平台数据汇总看板
+          </p>
+          <Button
+            className="mt-6 gap-2 bg-[#0F172A] text-white hover:bg-slate-800"
+            onClick={() => setShowImportDialog(true)}
           >
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold text-slate-800">
-                  {platform.platform}
-                </CardTitle>
-                <Badge
-                  variant="secondary"
-                  className="rounded-full bg-slate-100 text-xs text-slate-600"
-                >
-                  {platform.videos} 个视频
-                </Badge>
+            <Upload className="h-4 w-4" />
+            导入视频数据
+          </Button>
+        </div>
+      )}
+
+      {/* KPI Cards */}
+      {hasData && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <Card className="border-slate-200 shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                <Eye className="h-3.5 w-3.5" />
+                总播放量
               </div>
+              <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900">
+                {formatNumber(totalViews)}
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="border-slate-200 shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                <Heart className="h-3.5 w-3.5" />
+                总点赞
+              </div>
+              <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900">
+                {formatNumber(totalLikes)}
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="border-slate-200 shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                <MessageCircle className="h-3.5 w-3.5" />
+                总评论
+              </div>
+              <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900">
+                {formatNumber(totalComments)}
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="border-slate-200 shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                <Share2 className="h-3.5 w-3.5" />
+                总分享
+              </div>
+              <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900">
+                {formatNumber(totalShares)}
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="border-slate-200 shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                <TrendingUp className="h-3.5 w-3.5" />
+                平均互动率
+              </div>
+              <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900">
+                {avgEngagement.toFixed(1)}%
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Platform Stats & Top Videos */}
+      {hasData && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* Platform Breakdown */}
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                <BarChart3 className="h-4 w-4 text-blue-500" />
+                平台数据分布
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-4 gap-4">
-                <div>
-                  <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                    <Eye className="h-3 w-3" />
-                    总播放
+              <div className="space-y-4">
+                {platformStats.map((stat) => (
+                  <div
+                    key={stat.platform}
+                    className="rounded-lg border border-slate-100 p-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <Badge
+                        variant="outline"
+                        className="rounded-full text-xs"
+                      >
+                        {stat.platform}
+                      </Badge>
+                      <span className="text-xs text-slate-400">
+                        {stat.videos} 个视频
+                      </span>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-xs text-slate-400">播放</span>
+                        <p className="font-semibold tabular-nums text-slate-800">
+                          {formatNumber(stat.totalViews)}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-slate-400">点赞</span>
+                        <p className="font-semibold tabular-nums text-slate-800">
+                          {formatNumber(stat.totalLikes)}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-slate-400">评论</span>
+                        <p className="font-semibold tabular-nums text-slate-800">
+                          {formatNumber(stat.totalComments)}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-slate-400">互动率</span>
+                        <p className="font-semibold tabular-nums text-emerald-600">
+                          {stat.avgEngagement}%
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                  <p className="mt-1 text-lg font-bold tabular-nums text-slate-900">
-                    {formatNumber(platform.totalViews)}
-                  </p>
-                </div>
-                <div>
-                  <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                    <Heart className="h-3 w-3" />
-                    总点赞
-                  </div>
-                  <p className="mt-1 text-lg font-bold tabular-nums text-slate-900">
-                    {formatNumber(platform.totalLikes)}
-                  </p>
-                </div>
-                <div>
-                  <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                    <MessageCircle className="h-3 w-3" />
-                    总评论
-                  </div>
-                  <p className="mt-1 text-lg font-bold tabular-nums text-slate-900">
-                    {formatNumber(platform.totalComments)}
-                  </p>
-                </div>
-                <div>
-                  <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                    <Share2 className="h-3 w-3" />
-                    总分享
-                  </div>
-                  <p className="mt-1 text-lg font-bold tabular-nums text-slate-900">
-                    {formatNumber(platform.totalShares)}
-                  </p>
-                </div>
-              </div>
-              <div className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-3">
-                <span className="text-xs text-slate-400">平均互动率</span>
-                <span className="text-sm font-semibold tabular-nums text-emerald-600">
-                  {platform.avgEngagement}%
-                </span>
-                {platform.trend === 'up' ? (
-                  <ArrowUpRight className="h-3 w-3 text-emerald-500" />
-                ) : (
-                  <ArrowDownRight className="h-3 w-3 text-red-500" />
-                )}
+                ))}
               </div>
             </CardContent>
           </Card>
-        ))}
-      </div>
 
-      {/* Weekly Trend Chart */}
-      <Card className="border-slate-200 bg-white">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold text-slate-800">
-            本周播放量趋势
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-end gap-3 pt-2">
-            {weeklyData.map((day) => {
-              const height = (day.views / maxViews) * 160;
-              return (
-                <div
-                  key={day.day}
-                  className="group flex flex-1 flex-col items-center gap-2"
-                >
-                  <div className="relative w-full">
-                    <div
-                      className="w-full rounded-t-md bg-gradient-to-t from-blue-500 to-blue-400 transition-all duration-300 group-hover:from-blue-600 group-hover:to-blue-500"
-                      style={{ height: `${height}px` }}
-                    />
-                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-slate-800 px-2 py-1 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
-                      {formatNumber(day.views)}
-                    </div>
-                  </div>
-                  <span className="text-xs text-slate-400">{day.day}</span>
-                </div>
-              );
-            })}
-          </div>
-          <div className="mt-4 flex items-center gap-6 border-t border-slate-100 pt-4">
-            <div className="flex items-center gap-2">
-              <div className="h-2.5 w-2.5 rounded-full bg-blue-500" />
-              <span className="text-xs text-slate-500">播放量</span>
-            </div>
-            <div className="text-xs text-slate-400">
-              周总计:{' '}
-              <span className="font-semibold text-slate-700">
-                {formatNumber(
-                  weeklyData.reduce((sum, d) => sum + d.views, 0)
-                )}
-              </span>
-            </div>
-            <div className="flex items-center gap-1 text-xs text-emerald-600">
-              <TrendingUp className="h-3 w-3" />
-              较上周 +18.5%
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Top Videos Table */}
-      <Card className="border-slate-200 bg-white">
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-semibold text-slate-800">
-              热门视频排行
-            </CardTitle>
-            <Badge
-              variant="secondary"
-              className="rounded-full bg-emerald-50 text-xs text-emerald-700"
-            >
-              数据已自动回收
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-1">
-            {topVideos.map((video, idx) => (
-              <div
-                key={video.id}
-                className="flex items-center justify-between rounded-lg p-3 transition-colors hover:bg-slate-50"
-              >
-                <div className="flex items-center gap-3">
+          {/* Top Videos */}
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                <TrendingUp className="h-4 w-4 text-amber-500" />
+                热门视频 TOP 5
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {topVideos.slice(0, 5).map((video, index) => (
                   <div
-                    className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold ${
-                      idx < 3
-                        ? 'bg-amber-100 text-amber-700'
-                        : 'bg-slate-100 text-slate-500'
-                    }`}
+                    key={video.id}
+                    className="flex items-start gap-3 rounded-lg border border-slate-100 p-3"
                   >
-                    {idx + 1}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-slate-800">
-                      {video.title}
-                    </p>
-                    <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">
-                      <span>{video.platform}</span>
-                      <span>·</span>
-                      <span>{video.publishDate}</span>
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-500">
+                      {index + 1}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-slate-800">
+                        {video.title}
+                      </p>
+                      <div className="mt-1 flex items-center gap-3 text-xs text-slate-400">
+                        <Badge
+                          variant="outline"
+                          className="rounded-full text-[10px]"
+                        >
+                          {video.platform}
+                        </Badge>
+                        <span className="flex items-center gap-0.5">
+                          <Eye className="h-3 w-3" />
+                          {formatNumber(video.views)}
+                        </span>
+                        <span className="flex items-center gap-0.5">
+                          <Heart className="h-3 w-3" />
+                          {formatNumber(video.likes)}
+                        </span>
+                      </div>
                     </div>
                   </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Import Dialog */}
+      {showImportDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
+                  <Upload className="h-4 w-4 text-blue-500" />
                 </div>
-                <div className="flex items-center gap-6">
-                  <div className="text-right">
-                    <p className="text-sm font-semibold tabular-nums text-slate-800">
-                      {formatNumber(video.views)}
-                    </p>
-                    <p className="text-[10px] text-slate-400">播放</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold tabular-nums text-slate-800">
-                      {formatNumber(video.likes)}
-                    </p>
-                    <p className="text-[10px] text-slate-400">点赞</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold tabular-nums text-slate-800">
-                      {formatNumber(video.comments)}
-                    </p>
-                    <p className="text-[10px] text-slate-400">评论</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold tabular-nums text-emerald-600">
-                      {video.engagement}%
-                    </p>
-                    <p className="text-[10px] text-slate-400">互动率</p>
-                  </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    导入视频数据
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    支持 CSV / JSON 格式
+                  </p>
                 </div>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-slate-400"
+                onClick={() => setShowImportDialog(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
 
-      {/* AI Report Dialog */}
-      {showReport && (
+            <div className="px-6 py-5">
+              {isImporting ? (
+                <div className="flex flex-col items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                  <p className="mt-4 text-sm text-slate-600">正在解析数据...</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div
+                    className="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 py-10 transition-colors hover:border-blue-300 hover:bg-blue-50/30"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="h-8 w-8 text-slate-300" />
+                    <p className="mt-3 text-sm font-medium text-slate-600">
+                      点击上传文件
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      支持 .csv 和 .json 格式
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg bg-slate-50 p-3">
+                    <p className="text-xs font-medium text-slate-600">
+                      CSV 字段映射说明
+                    </p>
+                    <div className="mt-2 space-y-1 text-[11px] text-slate-400">
+                      <p>视频标题 / title / 标题 → 视频名称</p>
+                      <p>平台 / platform → 发布平台</p>
+                      <p>播放量 / views / 播放 → 播放次数</p>
+                      <p>点赞 / likes → 点赞数</p>
+                      <p>评论 / comments → 评论数</p>
+                      <p>分享 / shares → 分享数</p>
+                    </div>
+                  </div>
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv,.json"
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-3">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={() => setShowImportDialog(false)}
+              >
+                取消
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Report Dialog */}
+      {(isGenerating || reportContent) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="mx-4 w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50">
-                  <FileText className="h-5 w-5 text-blue-600" />
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-50">
+                  <FileText className="h-4 w-4 text-violet-500" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-slate-900">AI 数据周报</h3>
-                  {reportModel && (
-                    <p className="text-xs text-slate-400">
-                      由 {reportModel} 生成
-                    </p>
-                  )}
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    AI 数据周报
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Doubao Seed 2.0 Mini · 自动生成运营分析报告
+                  </p>
                 </div>
               </div>
-              <button
-                onClick={() => setShowReport(false)}
-                className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-slate-400"
+                onClick={() => setReportContent('')}
               >
-                <X className="h-5 w-5" />
-              </button>
+                <X className="h-4 w-4" />
+              </Button>
             </div>
-            <div className="max-h-[60vh] overflow-y-auto px-6 py-5">
-              {isGeneratingReport ? (
+
+            <div className="max-h-[480px] overflow-y-auto px-6 py-5">
+              {isGenerating ? (
                 <div className="flex flex-col items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-                  <p className="mt-4 text-sm text-slate-500">
-                    正在分析全平台数据，生成周报...
+                  <Loader2 className="h-8 w-8 animate-spin text-violet-500" />
+                  <p className="mt-4 text-sm font-medium text-slate-700">
+                    AI 正在生成数据周报...
                   </p>
                 </div>
               ) : (
-                <div className="prose prose-sm max-w-none text-slate-700">
-                  {reportResult.split('\n').map((line, i) => (
-                    <p key={i} className={line ? 'mb-2' : 'mb-4'}>
-                      {line}
-                    </p>
-                  ))}
+                <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+                  {reportContent}
                 </div>
               )}
             </div>
-            <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-6 py-4">
-              <button
-                onClick={() => setShowReport(false)}
-                className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100"
+
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-3">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={() => setReportContent('')}
               >
                 关闭
-              </button>
-              {!isGeneratingReport && reportResult && (
-                <button
+              </Button>
+              {!isGenerating && reportContent && (
+                <Button
+                  size="sm"
+                  className="gap-1.5 bg-violet-500 text-xs text-white hover:bg-violet-600"
                   onClick={handleGenerateReport}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
                 >
+                  <RefreshCw className="h-3 w-3" />
                   重新生成
-                </button>
+                </Button>
               )}
             </div>
           </div>

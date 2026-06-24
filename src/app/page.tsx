@@ -5,391 +5,283 @@ import {
   FileText,
   Video,
   TrendingUp,
-  ArrowUpRight,
-  ArrowDownRight,
   Clock,
   Zap,
   CheckCircle2,
   AlertCircle,
   Play,
+  ArrowRight,
+  RefreshCw,
+  Database,
+  Bot,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 
-const stats = [
+const workflowSteps = [
   {
-    label: '活跃选题',
-    value: '47',
-    change: '+12',
-    trend: 'up',
-    icon: Lightbulb,
+    step: '01',
+    title: '热点抓取',
+    desc: 'Coze 工作流定时抓取抖音/视频号热门内容',
+    model: 'Doubao Seed 2.0 Lite',
+    status: 'ready',
+    icon: Zap,
     color: 'text-amber-500',
     bg: 'bg-amber-50',
   },
   {
-    label: '生成脚本',
-    value: '23',
-    change: '+8',
-    trend: 'up',
+    step: '02',
+    title: '选题评估',
+    desc: 'AI 分析热度因素、受众画像与选题建议',
+    model: 'Doubao Seed 2.0 Lite',
+    status: 'ready',
+    icon: Lightbulb,
+    color: 'text-blue-500',
+    bg: 'bg-blue-50',
+  },
+  {
+    step: '03',
+    title: '脚本生成',
+    desc: '大模型生成脚本大纲，支持流式输出',
+    model: 'Qwen 3.5 Plus',
+    status: 'ready',
     icon: FileText,
     color: 'text-violet-500',
     bg: 'bg-violet-50',
   },
   {
-    label: '已发布视频',
-    value: '156',
-    change: '+5',
-    trend: 'up',
-    icon: Video,
-    color: 'text-blue-500',
-    bg: 'bg-blue-50',
-  },
-  {
-    label: '本周总播放',
-    value: '82.4w',
-    change: '+23%',
-    trend: 'up',
+    step: '04',
+    title: '数据回收',
+    desc: '定时抓取播放量、点赞、评论等数据',
+    model: 'Doubao Seed 2.0 Mini',
+    status: 'ready',
     icon: TrendingUp,
     color: 'text-emerald-500',
     bg: 'bg-emerald-50',
   },
 ];
 
-const recentTopics = [
+const quickActions = [
   {
-    id: 1,
-    title: '2024年最值得入手的智能家居设备',
-    platform: '抖音',
-    heat: 9800,
-    status: '脚本生成中',
-    statusColor: 'bg-violet-100 text-violet-700',
-    assignee: '张明',
-    time: '10分钟前',
+    title: '抓取热榜',
+    desc: '获取抖音/视频号实时热门话题',
+    icon: RefreshCw,
+    href: '/topics',
+    color: 'text-amber-500',
+    bg: 'bg-amber-50',
   },
   {
-    id: 2,
-    title: '职场新人必看的10个沟通技巧',
-    platform: '视频号',
-    heat: 8500,
-    status: '待审核',
-    statusColor: 'bg-amber-100 text-amber-700',
-    assignee: '李婷',
-    time: '25分钟前',
+    title: '导入数据',
+    desc: '上传 CSV/JSON 格式的选题或视频数据',
+    icon: Database,
+    href: '/topics',
+    color: 'text-blue-500',
+    bg: 'bg-blue-50',
   },
   {
-    id: 3,
-    title: '周末露营装备清单分享',
-    platform: '抖音',
-    heat: 7200,
-    status: '已发布',
-    statusColor: 'bg-emerald-100 text-emerald-700',
-    assignee: '王浩',
-    time: '1小时前',
+    title: '生成脚本',
+    desc: '选择选题后 AI 自动生成脚本大纲',
+    icon: FileText,
+    href: '/scripts',
+    color: 'text-violet-500',
+    bg: 'bg-violet-50',
   },
   {
-    id: 4,
-    title: 'AI绘画工具横评：哪个最适合新手',
-    platform: '视频号',
-    heat: 6800,
-    status: '选题评估',
-    statusColor: 'bg-blue-100 text-blue-700',
-    assignee: '赵雪',
-    time: '2小时前',
-  },
-  {
-    id: 5,
-    title: '一人食快手菜谱：15分钟搞定晚餐',
-    platform: '抖音',
-    heat: 9200,
-    status: '拍摄中',
-    statusColor: 'bg-orange-100 text-orange-700',
-    assignee: '张明',
-    time: '3小时前',
-  },
-];
-
-const workflowStatus = [
-  {
-    name: '热点抓取流',
-    status: 'running',
-    lastRun: '每2小时',
-    nextRun: '45分钟后',
-    successRate: '99.2%',
-  },
-  {
-    name: '脚本生成流',
-    status: 'running',
-    lastRun: '按需触发',
-    nextRun: '等待触发',
-    successRate: '97.8%',
-  },
-  {
-    name: '数据回收流',
-    status: 'running',
-    lastRun: '每6小时',
-    nextRun: '2小时后',
-    successRate: '98.5%',
-  },
-  {
-    name: '飞书通知流',
-    status: 'warning',
-    lastRun: '30分钟前',
-    nextRun: '—',
-    successRate: '94.1%',
+    title: '数据看板',
+    desc: '查看全平台播放、点赞、评论汇总',
+    icon: TrendingUp,
+    href: '/analytics',
+    color: 'text-emerald-500',
+    bg: 'bg-emerald-50',
   },
 ];
 
 export default function DashboardPage() {
   return (
-    <div className="space-y-6">
-      {/* Page Title */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">运营总览</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Coze 工作流 × 飞书多维表 — 全流程自动化运营指挥中心
-          </p>
-        </div>
-        <Button className="gap-2 bg-[#0F172A] text-white hover:bg-slate-800">
-          <Zap className="h-4 w-4" />
-          手动触发工作流
-        </Button>
+    <div className="space-y-8">
+      {/* Page Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">运营总览</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Coze × 飞书自动化运营工作流 · 选题策划 → 脚本生成 → 数据回收
+        </p>
       </div>
 
-      {/* Stats Grid */}
+      {/* Quick Actions */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => {
-          const Icon = stat.icon;
-          return (
+        {quickActions.map((action) => (
+          <Link key={action.title} href={action.href}>
+            <div className="group cursor-pointer rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:border-slate-300 hover:shadow-md">
+              <div className="flex items-center gap-3">
+                <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${action.bg}`}>
+                  <action.icon className={`h-5 w-5 ${action.color}`} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-800">
+                    {action.title}
+                  </h3>
+                  <p className="mt-0.5 text-xs text-slate-400">
+                    {action.desc}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 flex items-center gap-1 text-xs font-medium text-slate-400 transition-colors group-hover:text-slate-600">
+                前往
+                <ArrowRight className="h-3 w-3" />
+              </div>
+            </div>
+          </Link>
+        ))}
+      </div>
+
+      {/* Workflow Architecture */}
+      <div>
+        <div className="mb-4 flex items-center gap-2">
+          <h2 className="text-base font-semibold text-slate-800">
+            自动化工作流
+          </h2>
+          <Badge variant="outline" className="rounded-full text-[10px]">
+            Coze Workflow
+          </Badge>
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {workflowSteps.map((step, index) => (
             <div
-              key={stat.label}
-              className="group rounded-xl border border-slate-200 bg-white p-5 transition-all duration-200 hover:border-slate-300 hover:shadow-sm"
+              key={step.step}
+              className="relative rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
             >
               <div className="flex items-start justify-between">
-                <div
-                  className={`flex h-10 w-10 items-center justify-center rounded-lg ${stat.bg}`}
-                >
-                  <Icon className={`h-5 w-5 ${stat.color}`} />
+                <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${step.bg}`}>
+                  <step.icon className={`h-4.5 w-4.5 ${step.color}`} />
                 </div>
-                <div
-                  className={`flex items-center gap-1 text-xs font-medium ${
-                    stat.trend === 'up'
-                      ? 'text-emerald-600'
-                      : 'text-red-500'
-                  }`}
-                >
-                  {stat.trend === 'up' ? (
-                    <ArrowUpRight className="h-3 w-3" />
-                  ) : (
-                    <ArrowDownRight className="h-3 w-3" />
-                  )}
-                  {stat.change}
-                </div>
+                <span className="text-[10px] font-bold text-slate-300">
+                  {step.step}
+                </span>
               </div>
-              <div className="mt-3">
-                <p className="text-2xl font-bold tabular-nums text-slate-900">
-                  {stat.value}
-                </p>
-                <p className="mt-0.5 text-sm text-slate-500">{stat.label}</p>
+              <h3 className="mt-3 text-sm font-semibold text-slate-800">
+                {step.title}
+              </h3>
+              <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                {step.desc}
+              </p>
+              <div className="mt-3 flex items-center gap-1.5">
+                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                  {step.model}
+                </span>
               </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Recent Topics */}
-        <div className="col-span-2 rounded-xl border border-slate-200 bg-white">
-          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-            <h2 className="text-sm font-semibold text-slate-900">
-              最新选题动态
-            </h2>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-xs text-slate-500"
-            >
-              查看全部
-            </Button>
-          </div>
-          <div className="divide-y divide-slate-50">
-            {recentTopics.map((topic) => (
-              <div
-                key={topic.id}
-                className="flex items-center justify-between px-5 py-3.5 transition-colors hover:bg-slate-50/50"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-xs font-medium text-slate-600">
-                    {topic.platform === '抖音' ? '抖' : '视'}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-slate-800">
-                      {topic.title}
-                    </p>
-                    <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">
-                      <span>{topic.platform}</span>
-                      <span>·</span>
-                      <span>热度 {(topic.heat / 10000).toFixed(1)}w</span>
-                      <span>·</span>
-                      <span>{topic.assignee}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Badge
-                    variant="secondary"
-                    className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${topic.statusColor}`}
-                  >
-                    {topic.status}
-                  </Badge>
-                  <span className="flex items-center gap-1 text-xs text-slate-400">
-                    <Clock className="h-3 w-3" />
-                    {topic.time}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Workflow Status */}
-        <div className="rounded-xl border border-slate-200 bg-white">
-          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-            <h2 className="text-sm font-semibold text-slate-900">
-              工作流状态
-            </h2>
-            <Badge
-              variant="secondary"
-              className="rounded-full bg-emerald-50 text-emerald-700"
-            >
-              3/4 运行中
-            </Badge>
-          </div>
-          <div className="space-y-1 p-3">
-            {workflowStatus.map((wf) => (
-              <div
-                key={wf.name}
-                className="rounded-lg p-3 transition-colors hover:bg-slate-50"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {wf.status === 'running' ? (
-                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                    ) : (
-                      <AlertCircle className="h-4 w-4 text-amber-500" />
-                    )}
-                    <span className="text-sm font-medium text-slate-800">
-                      {wf.name}
-                    </span>
-                  </div>
-                  <span className="text-xs tabular-nums text-slate-400">
-                    {wf.successRate}
-                  </span>
-                </div>
-                <div className="mt-2 flex items-center gap-3 text-xs text-slate-400">
-                  <span>上次: {wf.lastRun}</span>
-                  <span>下次: {wf.nextRun}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Quick Actions */}
-          <div className="border-t border-slate-100 p-4">
-            <p className="mb-3 text-xs font-medium text-slate-500">
-              快捷操作
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="justify-start gap-2 text-xs"
-              >
-                <Play className="h-3 w-3" />
-                抓取热点
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="justify-start gap-2 text-xs"
-              >
-                <FileText className="h-3 w-3" />
-                生成脚本
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Architecture Overview */}
-      <div className="rounded-xl border border-slate-200 bg-white p-6">
-        <h2 className="mb-4 text-sm font-semibold text-slate-900">
-          自动化架构概览
-        </h2>
-        <div className="flex items-center justify-between gap-4 overflow-x-auto pb-2">
-          {[
-            {
-              step: '01',
-              title: '热点抓取',
-              desc: 'Coze 定时抓取抖音/视频号热门内容',
-              color: 'border-amber-300 bg-amber-50',
-              textColor: 'text-amber-700',
-            },
-            {
-              step: '02',
-              title: '选题入库',
-              desc: '分析后自动写入飞书多维表',
-              color: 'border-blue-300 bg-blue-50',
-              textColor: 'text-blue-700',
-            },
-            {
-              step: '03',
-              title: '脚本生成',
-              desc: 'AI 大模型自动生成脚本大纲',
-              color: 'border-violet-300 bg-violet-50',
-              textColor: 'text-violet-700',
-            },
-            {
-              step: '04',
-              title: '人工制作',
-              desc: '团队拍摄/剪辑/审核发布',
-              color: 'border-orange-300 bg-orange-50',
-              textColor: 'text-orange-700',
-            },
-            {
-              step: '05',
-              title: '数据回收',
-              desc: '自动汇总播放/点赞/评论数据',
-              color: 'border-emerald-300 bg-emerald-50',
-              textColor: 'text-emerald-700',
-            },
-          ].map((item, idx) => (
-            <div key={item.step} className="flex items-center gap-4">
-              <div
-                className={`min-w-[180px] rounded-lg border-2 ${item.color} p-4`}
-              >
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`text-xs font-bold ${item.textColor}`}
-                  >
-                    {item.step}
-                  </span>
-                  <span
-                    className={`text-sm font-semibold ${item.textColor}`}
-                  >
-                    {item.title}
-                  </span>
-                </div>
-                <p className="mt-1.5 text-xs text-slate-500">{item.desc}</p>
-              </div>
-              {idx < 4 && (
-                <div className="flex h-px w-8 items-center">
-                  <div className="h-px w-full bg-slate-300" />
+              {index < workflowSteps.length - 1 && (
+                <div className="absolute -right-2 top-1/2 hidden -translate-y-1/2 lg:block">
+                  <ArrowRight className="h-4 w-4 text-slate-300" />
                 </div>
               )}
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* System Status */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Workflow Status */}
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+            <Bot className="h-4 w-4 text-blue-500" />
+            工作流状态
+          </h3>
+          <div className="mt-4 space-y-3">
+            {[
+              { name: '热点抓取工作流', status: '运行中', lastRun: '每2小时', color: 'bg-emerald-500' },
+              { name: '脚本生成工作流', status: '待触发', lastRun: '手动触发', color: 'bg-amber-500' },
+              { name: '数据回收工作流', status: '运行中', lastRun: '每日 08:00', color: 'bg-emerald-500' },
+              { name: '飞书通知工作流', status: '运行中', lastRun: '实时', color: 'bg-emerald-500' },
+            ].map((wf) => (
+              <div
+                key={wf.name}
+                className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2.5"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className={`h-2 w-2 rounded-full ${wf.color}`} />
+                  <span className="text-sm text-slate-700">{wf.name}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-slate-400">{wf.lastRun}</span>
+                  <Badge
+                    variant="outline"
+                    className={`rounded-full text-[10px] ${
+                      wf.status === '运行中'
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
+                        : 'border-amber-200 bg-amber-50 text-amber-600'
+                    }`}
+                  >
+                    {wf.status}
+                  </Badge>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Manual Operations */}
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+            <AlertCircle className="h-4 w-4 text-amber-500" />
+            人工操作范围
+          </h3>
+          <p className="mt-1 text-xs text-slate-400">
+            以下环节需要团队成员手动完成，Coze 工作流负责数据回收与状态管理
+          </p>
+          <div className="mt-4 space-y-3">
+            {[
+              { task: '视频拍摄与剪辑', owner: '制作团队', icon: Video },
+              { task: '多平台手动发布', owner: '运营团队', icon: Play },
+              { task: '内容终审与合规检查', owner: '审核负责人', icon: CheckCircle2 },
+              { task: '飞书文档协作编辑', owner: '全体团队', icon: FileText },
+            ].map((item) => (
+              <div
+                key={item.task}
+                className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2.5"
+              >
+                <div className="flex items-center gap-2.5">
+                  <item.icon className="h-4 w-4 text-slate-400" />
+                  <span className="text-sm text-slate-700">{item.task}</span>
+                </div>
+                <Badge
+                  variant="outline"
+                  className="rounded-full border-slate-200 text-[10px] text-slate-500"
+                >
+                  {item.owner}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Getting Started Guide */}
+      <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-5">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-blue-800">
+          <Clock className="h-4 w-4" />
+          快速开始
+        </h3>
+        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="rounded-lg bg-white p-3">
+            <p className="text-xs font-medium text-blue-700">1. 抓取热榜</p>
+            <p className="mt-1 text-[11px] text-slate-500">
+              前往「选题池」点击「抓取热榜」获取抖音/视频号实时热门话题
+            </p>
+          </div>
+          <div className="rounded-lg bg-white p-3">
+            <p className="text-xs font-medium text-blue-700">2. 生成脚本</p>
+            <p className="mt-1 text-[11px] text-slate-500">
+              选择选题后点击「生成脚本」，AI 将自动生成视频脚本大纲
+            </p>
+          </div>
+          <div className="rounded-lg bg-white p-3">
+            <p className="text-xs font-medium text-blue-700">3. 导入数据</p>
+            <p className="mt-1 text-[11px] text-slate-500">
+              在「数据看板」导入视频数据（CSV/JSON），查看全平台数据分析
+            </p>
+          </div>
         </div>
       </div>
     </div>

@@ -1,19 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   Search,
   Filter,
-  Plus,
   MoreHorizontal,
   ArrowUpDown,
-  ExternalLink,
   Flame,
   Clock,
   User,
   Sparkles,
   Loader2,
   X,
+  RefreshCw,
+  Upload,
+  Inbox,
+  TrendingUp,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -86,114 +88,8 @@ const statusConfig: Record<
   },
 };
 
-const mockTopics: Topic[] = [
-  {
-    id: 1,
-    title: '2024年最值得入手的智能家居设备',
-    platform: '抖音',
-    heat: 98000,
-    likes: 12400,
-    comments: 890,
-    status: '脚本生成中',
-    assignee: '张明',
-    publishDate: '2024-12-20',
-    sourceUrl: '#',
-    tags: ['科技', '智能家居'],
-  },
-  {
-    id: 2,
-    title: '职场新人必看的10个沟通技巧',
-    platform: '视频号',
-    heat: 85000,
-    likes: 9800,
-    comments: 1200,
-    status: '待审核',
-    assignee: '李婷',
-    publishDate: '2024-12-19',
-    sourceUrl: '#',
-    tags: ['职场', '沟通'],
-  },
-  {
-    id: 3,
-    title: '周末露营装备清单分享',
-    platform: '抖音',
-    heat: 72000,
-    likes: 8500,
-    comments: 670,
-    status: '已发布',
-    assignee: '王浩',
-    publishDate: '2024-12-18',
-    sourceUrl: '#',
-    tags: ['户外', '露营'],
-  },
-  {
-    id: 4,
-    title: 'AI绘画工具横评：哪个最适合新手',
-    platform: '视频号',
-    heat: 68000,
-    likes: 7200,
-    comments: 540,
-    status: '选题评估',
-    assignee: '赵雪',
-    publishDate: '2024-12-22',
-    sourceUrl: '#',
-    tags: ['AI', '工具'],
-  },
-  {
-    id: 5,
-    title: '一人食快手菜谱：15分钟搞定晚餐',
-    platform: '抖音',
-    heat: 92000,
-    likes: 15600,
-    comments: 2100,
-    status: '拍摄中',
-    assignee: '张明',
-    publishDate: '2024-12-21',
-    sourceUrl: '#',
-    tags: ['美食', '快手菜'],
-  },
-  {
-    id: 6,
-    title: '2024年度最佳手机摄影技巧合集',
-    platform: '抖音',
-    heat: 56000,
-    likes: 6800,
-    comments: 430,
-    status: '脚本生成中',
-    assignee: '李婷',
-    publishDate: '2024-12-23',
-    sourceUrl: '#',
-    tags: ['摄影', '手机'],
-  },
-  {
-    id: 7,
-    title: '居家健身：无器械全身训练计划',
-    platform: '视频号',
-    heat: 48000,
-    likes: 5200,
-    comments: 380,
-    status: '已归档',
-    assignee: '王浩',
-    publishDate: '2024-12-15',
-    sourceUrl: '#',
-    tags: ['健身', '居家'],
-  },
-  {
-    id: 8,
-    title: '新手养猫指南：从选猫到日常护理',
-    platform: '抖音',
-    heat: 88000,
-    likes: 11200,
-    comments: 1500,
-    status: '待审核',
-    assignee: '赵雪',
-    publishDate: '2024-12-24',
-    sourceUrl: '#',
-    tags: ['宠物', '养猫'],
-  },
-];
-
 export default function TopicsPage() {
+  const [topics, setTopics] = useState<Topic[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [platformFilter, setPlatformFilter] = useState<string>('all');
@@ -201,8 +97,13 @@ export default function TopicsPage() {
   const [analysisResult, setAnalysisResult] = useState<string>('');
   const [analysisModel, setAnalysisModel] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [lastFetchedAt, setLastFetchedAt] = useState<string>('');
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const filteredTopics = mockTopics.filter((topic) => {
+  const filteredTopics = topics.filter((topic) => {
     const matchesSearch = topic.title
       .toLowerCase()
       .includes(searchQuery.toLowerCase());
@@ -212,6 +113,103 @@ export default function TopicsPage() {
       platformFilter === 'all' || topic.platform === platformFilter;
     return matchesSearch && matchesStatus && matchesPlatform;
   });
+
+  const handleFetchTrending = async () => {
+    setIsFetching(true);
+    try {
+      const response = await fetch('/api/douyin-trending');
+      const data = await response.json();
+
+      if (data.success && data.data.topics) {
+        const newTopics: Topic[] = data.data.topics.map(
+          (item: {
+            rank: number;
+            title: string;
+            heatScore: number;
+            category: string;
+            source: string;
+            url?: string;
+            snippet?: string;
+          }, index: number) => ({
+            id: Date.now() + index,
+            title: item.title,
+            platform: item.source || '抖音',
+            heat: item.heatScore || Math.floor(9000 - index * 300),
+            likes: 0,
+            comments: 0,
+            status: '选题评估' as TopicStatus,
+            assignee: '待分配',
+            publishDate: new Date().toISOString().split('T')[0],
+            sourceUrl: item.url || '',
+            tags: [item.category || '热点', item.snippet ? '热门' : ''],
+          })
+        );
+        setTopics((prev) => {
+          const existingTitles = new Set(prev.map((t) => t.title));
+          const uniqueNew = newTopics.filter(
+            (t: Topic) => !existingTitles.has(t.title)
+          );
+          return [...uniqueNew, ...prev];
+        });
+        setLastFetchedAt(new Date().toLocaleTimeString('zh-CN'));
+      }
+    } catch (err) {
+      console.error('抓取热榜失败:', err);
+    } finally {
+      setIsFetching(false);
+    }
+  };
+
+  const handleImportFile = async (file: File) => {
+    setIsImporting(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/api/import-data', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.data.rows) {
+        const importedTopics: Topic[] = data.data.rows.map(
+          (row: Record<string, string | number | boolean | null>, index: number) => ({
+            id: Date.now() + index,
+            title: String(row['选题名称'] || row['title'] || row['名称'] || `导入选题 ${index + 1}`),
+            platform: String(row['来源平台'] || row['platform'] || row['平台'] || '未知'),
+            heat: Number(row['热度'] || row['heat'] || row['heatScore'] || 0),
+            likes: Number(row['点赞'] || row['likes'] || 0),
+            comments: Number(row['评论'] || row['comments'] || 0),
+            status: (String(row['状态'] || row['status'] || '选题评估')) as TopicStatus,
+            assignee: String(row['负责人'] || row['assignee'] || '待分配'),
+            publishDate: String(row['发布时间'] || row['publishDate'] || new Date().toISOString().split('T')[0]),
+            sourceUrl: String(row['链接'] || row['url'] || ''),
+            tags: String(row['标签'] || row['tags'] || '')
+              .split(/[,，、]/)
+              .filter(Boolean),
+          })
+        );
+        setTopics((prev) => [...importedTopics, ...prev]);
+        setShowImportDialog(false);
+      }
+    } catch (err) {
+      console.error('导入数据失败:', err);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleImportFile(file);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   const handleAnalyzeTopic = async (topic: Topic) => {
     setAnalyzingTopic(topic);
@@ -260,223 +258,353 @@ export default function TopicsPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">选题池</h1>
           <p className="mt-1 text-sm text-slate-500">
-            飞书多维表数据同步 · 共 {mockTopics.length} 个选题
+            {topics.length > 0
+              ? `共 ${topics.length} 个选题${lastFetchedAt ? ` · 上次抓取 ${lastFetchedAt}` : ''}`
+              : '抓取热榜或导入数据开始使用'}
           </p>
         </div>
-        <Button className="gap-2 bg-[#0F172A] text-white hover:bg-slate-800">
-          <Plus className="h-4 w-4" />
-          手动添加选题
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 text-xs"
+            onClick={() => setShowImportDialog(true)}
+            disabled={isImporting}
+          >
+            <Upload className="h-3.5 w-3.5" />
+            导入数据
+          </Button>
+          <Button
+            className="gap-2 bg-[#0F172A] text-white hover:bg-slate-800"
+            onClick={handleFetchTrending}
+            disabled={isFetching}
+          >
+            {isFetching ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            {isFetching ? '抓取中...' : '抓取热榜'}
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input
-            placeholder="搜索选题名称..."
-            value={searchQuery}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setSearchQuery(e.target.value)
-            }
-            className="h-9 max-w-[320px] rounded-lg border-slate-200 bg-white pl-9 text-sm"
-          />
+      {topics.length > 0 && (
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              placeholder="搜索选题名称..."
+              value={searchQuery}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setSearchQuery(e.target.value)
+              }
+              className="h-9 max-w-[320px] rounded-lg border-slate-200 bg-white pl-9 text-sm"
+            />
+          </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-9 w-[140px] rounded-lg border-slate-200 text-sm">
+              <Filter className="mr-2 h-3.5 w-3.5 text-slate-400" />
+              <SelectValue placeholder="全部状态" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部状态</SelectItem>
+              <SelectItem value="选题评估">选题评估</SelectItem>
+              <SelectItem value="脚本生成中">脚本生成中</SelectItem>
+              <SelectItem value="待审核">待审核</SelectItem>
+              <SelectItem value="拍摄中">拍摄中</SelectItem>
+              <SelectItem value="已发布">已发布</SelectItem>
+              <SelectItem value="已归档">已归档</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={platformFilter} onValueChange={setPlatformFilter}>
+            <SelectTrigger className="h-9 w-[140px] rounded-lg border-slate-200 text-sm">
+              <SelectValue placeholder="全部平台" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部平台</SelectItem>
+              <SelectItem value="抖音">抖音</SelectItem>
+              <SelectItem value="视频号">视频号</SelectItem>
+              <SelectItem value="快手">快手</SelectItem>
+              <SelectItem value="微博">微博</SelectItem>
+              <SelectItem value="综合">综合</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="h-9 w-[140px] rounded-lg border-slate-200 text-sm">
-            <Filter className="mr-2 h-3.5 w-3.5 text-slate-400" />
-            <SelectValue placeholder="全部状态" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">全部状态</SelectItem>
-            <SelectItem value="选题评估">选题评估</SelectItem>
-            <SelectItem value="脚本生成中">脚本生成中</SelectItem>
-            <SelectItem value="待审核">待审核</SelectItem>
-            <SelectItem value="拍摄中">拍摄中</SelectItem>
-            <SelectItem value="已发布">已发布</SelectItem>
-            <SelectItem value="已归档">已归档</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={platformFilter} onValueChange={setPlatformFilter}>
-          <SelectTrigger className="h-9 w-[140px] rounded-lg border-slate-200 text-sm">
-            <SelectValue placeholder="全部平台" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">全部平台</SelectItem>
-            <SelectItem value="抖音">抖音</SelectItem>
-            <SelectItem value="视频号">视频号</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      )}
 
-      {/* Table */}
-      <div className="rounded-xl border border-slate-200 bg-white">
-        <Table>
-          <TableHeader>
-            <TableRow className="border-slate-100 hover:bg-transparent">
-              <TableHead className="w-[300px] text-xs font-semibold text-slate-600">
-                <div className="flex items-center gap-1">
-                  选题名称
-                  <ArrowUpDown className="h-3 w-3 text-slate-400" />
-                </div>
-              </TableHead>
-              <TableHead className="text-xs font-semibold text-slate-600">
-                来源平台
-              </TableHead>
-              <TableHead className="text-xs font-semibold text-slate-600">
-                <div className="flex items-center gap-1">
-                  热度数据
-                  <ArrowUpDown className="h-3 w-3 text-slate-400" />
-                </div>
-              </TableHead>
-              <TableHead className="text-xs font-semibold text-slate-600">
-                状态
-              </TableHead>
-              <TableHead className="text-xs font-semibold text-slate-600">
-                <div className="flex items-center gap-1">
-                  负责人
-                  <User className="h-3 w-3 text-slate-400" />
-                </div>
-              </TableHead>
-              <TableHead className="text-xs font-semibold text-slate-600">
-                <div className="flex items-center gap-1">
-                  发布时间
-                  <Clock className="h-3 w-3 text-slate-400" />
-                </div>
-              </TableHead>
-              <TableHead className="w-[120px]" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredTopics.map((topic) => {
-              const config = statusConfig[topic.status];
-              return (
-                <TableRow
-                  key={topic.id}
-                  className="border-slate-50 transition-colors hover:bg-slate-50/50"
-                >
-                  <TableCell>
-                    <div>
-                      <p className="text-sm font-medium text-slate-800">
-                        {topic.title}
-                      </p>
-                      <div className="mt-1 flex gap-1.5">
-                        {topic.tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="outline"
-                      className="rounded-full border-slate-200 text-xs font-normal text-slate-600"
-                    >
-                      {topic.platform}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-1 text-sm font-medium tabular-nums text-slate-800">
-                        <Flame className="h-3.5 w-3.5 text-orange-400" />
-                        {(topic.heat / 10000).toFixed(1)}w
-                      </div>
-                      <div className="flex gap-3 text-xs text-slate-400">
-                        <span>赞 {topic.likes}</span>
-                        <span>评论 {topic.comments}</span>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="outline"
-                      className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${config.color}`}
-                    >
-                      <span
-                        className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${config.dot}`}
-                      />
-                      {topic.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-[10px] font-medium text-slate-600">
-                        {topic.assignee[0]}
-                      </div>
-                      <span className="text-sm text-slate-600">
-                        {topic.assignee}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-sm tabular-nums text-slate-500">
-                      {topic.publishDate}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 gap-1 px-2 text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                        onClick={() => handleAnalyzeTopic(topic)}
-                        disabled={isAnalyzing}
-                      >
-                        <Sparkles className="h-3 w-3" />
-                        AI 分析
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-slate-400 hover:text-slate-600"
-                      >
-                        <MoreHorizontal className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-
-        {/* Table Footer */}
-        <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
-          <p className="text-xs text-slate-400">
-            显示 {filteredTopics.length} / {mockTopics.length} 条记录
+      {/* Empty State */}
+      {topics.length === 0 && !isFetching && (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white py-20">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-50">
+            <Inbox className="h-8 w-8 text-slate-300" />
+          </div>
+          <h3 className="mt-4 text-base font-semibold text-slate-700">
+            选题池为空
+          </h3>
+          <p className="mt-1.5 max-w-sm text-center text-sm text-slate-400">
+            点击「抓取热榜」自动获取抖音/视频号热门话题，或点击「导入数据」上传 CSV/JSON 格式的选题数据
           </p>
-          <div className="flex items-center gap-2">
+          <div className="mt-6 flex items-center gap-3">
             <Button
               variant="outline"
               size="sm"
-              className="h-7 text-xs"
-              disabled
+              className="gap-1.5 text-xs"
+              onClick={() => setShowImportDialog(true)}
             >
-              上一页
+              <Upload className="h-3.5 w-3.5" />
+              导入数据
             </Button>
-            <span className="text-xs text-slate-500">1 / 1</span>
             <Button
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs"
-              disabled
+              className="gap-2 bg-[#0F172A] text-white hover:bg-slate-800"
+              onClick={handleFetchTrending}
             >
-              下一页
+              <TrendingUp className="h-4 w-4" />
+              抓取热榜
             </Button>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Table */}
+      {topics.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-slate-100 hover:bg-transparent">
+                <TableHead className="w-[300px] text-xs font-semibold text-slate-600">
+                  <div className="flex items-center gap-1">
+                    选题名称
+                    <ArrowUpDown className="h-3 w-3 text-slate-400" />
+                  </div>
+                </TableHead>
+                <TableHead className="text-xs font-semibold text-slate-600">
+                  来源平台
+                </TableHead>
+                <TableHead className="text-xs font-semibold text-slate-600">
+                  <div className="flex items-center gap-1">
+                    热度数据
+                    <ArrowUpDown className="h-3 w-3 text-slate-400" />
+                  </div>
+                </TableHead>
+                <TableHead className="text-xs font-semibold text-slate-600">
+                  状态
+                </TableHead>
+                <TableHead className="text-xs font-semibold text-slate-600">
+                  <div className="flex items-center gap-1">
+                    负责人
+                    <User className="h-3 w-3 text-slate-400" />
+                  </div>
+                </TableHead>
+                <TableHead className="text-xs font-semibold text-slate-600">
+                  <div className="flex items-center gap-1">
+                    发布时间
+                    <Clock className="h-3 w-3 text-slate-400" />
+                  </div>
+                </TableHead>
+                <TableHead className="w-[120px]" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredTopics.map((topic) => {
+                const config = statusConfig[topic.status] || statusConfig['选题评估'];
+                return (
+                  <TableRow
+                    key={topic.id}
+                    className="border-slate-50 transition-colors hover:bg-slate-50/50"
+                  >
+                    <TableCell>
+                      <div>
+                        <p className="text-sm font-medium text-slate-800">
+                          {topic.title}
+                        </p>
+                        <div className="mt-1 flex gap-1.5">
+                          {topic.tags.filter(Boolean).map((tag) => (
+                            <span
+                              key={tag}
+                              className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className="rounded-full border-slate-200 text-xs font-normal text-slate-600"
+                      >
+                        {topic.platform}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1 text-sm font-medium tabular-nums text-slate-800">
+                          <Flame className="h-3.5 w-3.5 text-orange-400" />
+                          {topic.heat >= 10000
+                            ? `${(topic.heat / 10000).toFixed(1)}w`
+                            : topic.heat.toLocaleString()}
+                        </div>
+                        <div className="flex gap-3 text-xs text-slate-400">
+                          <span>赞 {topic.likes}</span>
+                          <span>评论 {topic.comments}</span>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${config.color}`}
+                      >
+                        <span
+                          className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${config.dot}`}
+                        />
+                        {topic.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-[10px] font-medium text-slate-600">
+                          {topic.assignee[0]}
+                        </div>
+                        <span className="text-sm text-slate-600">
+                          {topic.assignee}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm tabular-nums text-slate-500">
+                        {topic.publishDate}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1 px-2 text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                          onClick={() => handleAnalyzeTopic(topic)}
+                          disabled={isAnalyzing}
+                        >
+                          <Sparkles className="h-3 w-3" />
+                          AI 分析
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-slate-400 hover:text-slate-600"
+                        >
+                          <MoreHorizontal className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+
+          {/* Table Footer */}
+          <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
+            <p className="text-xs text-slate-400">
+              显示 {filteredTopics.length} / {topics.length} 条记录
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Import Dialog */}
+      {showImportDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
+                  <Upload className="h-4 w-4 text-blue-500" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    导入数据
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    支持 CSV / JSON 格式
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-slate-400"
+                onClick={() => setShowImportDialog(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="px-6 py-5">
+              {isImporting ? (
+                <div className="flex flex-col items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                  <p className="mt-4 text-sm text-slate-600">正在解析数据...</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div
+                    className="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 py-10 transition-colors hover:border-blue-300 hover:bg-blue-50/30"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="h-8 w-8 text-slate-300" />
+                    <p className="mt-3 text-sm font-medium text-slate-600">
+                      点击上传文件
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      支持 .csv 和 .json 格式
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg bg-slate-50 p-3">
+                    <p className="text-xs font-medium text-slate-600">
+                      CSV 字段映射说明
+                    </p>
+                    <div className="mt-2 space-y-1 text-[11px] text-slate-400">
+                      <p>选题名称 / title / 名称 → 选题标题</p>
+                      <p>来源平台 / platform / 平台 → 平台来源</p>
+                      <p>热度 / heat / heatScore → 热度分数</p>
+                      <p>标签 / tags → 内容标签（逗号分隔）</p>
+                    </div>
+                  </div>
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv,.json"
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-3">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={() => setShowImportDialog(false)}
+              >
+                取消
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AI Analysis Dialog */}
       {analyzingTopic && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="mx-4 w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-2xl">
-            {/* Dialog Header */}
             <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50">
@@ -501,7 +629,6 @@ export default function TopicsPage() {
               </Button>
             </div>
 
-            {/* Dialog Content */}
             <div className="max-h-[480px] overflow-y-auto px-6 py-5">
               {isAnalyzing ? (
                 <div className="flex flex-col items-center justify-center py-12">
@@ -532,7 +659,6 @@ export default function TopicsPage() {
               )}
             </div>
 
-            {/* Dialog Footer */}
             <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-3">
               <Button
                 variant="outline"
@@ -548,7 +674,7 @@ export default function TopicsPage() {
                   className="gap-1.5 bg-amber-500 text-xs text-white hover:bg-amber-600"
                   onClick={() => handleAnalyzeTopic(analyzingTopic)}
                 >
-                  <Sparkles className="h-3 w-3" />
+                  <RefreshCw className="h-3 w-3" />
                   重新分析
                 </Button>
               )}
