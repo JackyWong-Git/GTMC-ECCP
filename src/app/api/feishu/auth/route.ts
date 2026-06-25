@@ -9,10 +9,14 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const { redirectUri: configRedirectUri } = getAppCredentials();
+
+    // 优先使用配置中的重定向 URI，确保与飞书应用配置一致
     const domain = process.env.COZE_PROJECT_DOMAIN_DEFAULT;
     const defaultRedirectUri = domain
       ? `https://${domain}/api/feishu/callback`
       : `${request.nextUrl.origin}/api/feishu/callback`;
+
+    // 优先级：URL 参数 > 配置文件 > 环境变量 > 当前请求 origin
     const redirectUri =
       searchParams.get("redirect_uri") ||
       configRedirectUri ||
@@ -26,6 +30,8 @@ export async function GET(request: NextRequest) {
       data: {
         authUrl,
         state,
+        // 返回实际使用的 redirectUri，方便调试
+        redirectUri,
       },
     });
   } catch (error) {
