@@ -154,6 +154,38 @@ export default function ScriptsPage() {
   const [streamContent, setStreamContent] = useState('');
   const [streamModel, setStreamModel] = useState('');
 
+  // 自动同步到台账
+  const syncToLedger = async (record: {
+    contentType: string;
+    title: string;
+    topicTitle: string;
+    platform: string;
+    summary: string;
+    model: string;
+    status: string;
+    resourceUrl: string;
+  }) => {
+    try {
+      // 先检查台账配置
+      const configRes = await fetch('/api/config');
+      const configData = await configRes.json();
+      if (!configData.success || !configData.data.ledgerAutoSync) return;
+      if (!configData.data.ledgerAppToken || !configData.data.ledgerTableId) return;
+
+      await fetch('/api/feishu/bitable/add-record', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          appToken: configData.data.ledgerAppToken,
+          tableId: configData.data.ledgerTableId,
+          records: [record],
+        }),
+      });
+    } catch {
+      // 台账同步失败不影响主流程
+    }
+  };
+
   const handleGenerateScript = useCallback(async () => {
     if (!newTopicTitle.trim()) return;
 
@@ -207,6 +239,17 @@ export default function ScriptsPage() {
               }
               if (data.done) {
                 setStreamModel(data.model || '');
+                // 自动同步到台账
+                syncToLedger({
+                  contentType: '脚本',
+                  title: newTopicTitle,
+                  topicTitle: newTopicTitle,
+                  platform: newPlatform,
+                  summary: fullContent.slice(0, 200),
+                  model: data.model || 'qwen-3-5-plus',
+                  status: '草稿',
+                  resourceUrl: '',
+                });
               }
               if (data.error) {
                 fullContent += `\n\n错误：${data.error}`;

@@ -64,6 +64,9 @@ interface PlatformConfig {
   douyinClientKey: string;
   douyinClientSecret: string;
   douyinRedirectUri: string;
+  ledgerAppToken: string;
+  ledgerTableId: string;
+  ledgerAutoSync: boolean;
 }
 
 export default function SettingsPage() {
@@ -80,6 +83,9 @@ export default function SettingsPage() {
     douyinClientKey: "",
     douyinClientSecret: "",
     douyinRedirectUri: "",
+    ledgerAppToken: "",
+    ledgerTableId: "",
+    ledgerAutoSync: true,
   });
   const [configLoading, setConfigLoading] = useState(false);
   const [configSaving, setConfigSaving] = useState(false);
@@ -102,6 +108,10 @@ export default function SettingsPage() {
   const [docs, setDocs] = useState<DocItem[]>([]);
   const [docsLoading, setDocsLoading] = useState(false);
 
+  // 台账配置
+  const [creatingLedger, setCreatingLedger] = useState(false);
+  const [ledgerCreated, setLedgerCreated] = useState(false);
+
   // 消息
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -119,6 +129,9 @@ export default function SettingsPage() {
           douyinClientKey: data.data.douyinClientKey || "",
           douyinClientSecret: data.data.douyinClientSecret || "",
           douyinRedirectUri: data.data.douyinRedirectUri || "",
+          ledgerAppToken: data.data.ledgerAppToken || "",
+          ledgerTableId: data.data.ledgerTableId || "",
+          ledgerAutoSync: data.data.ledgerAutoSync !== false,
         });
       }
     } catch {
@@ -324,6 +337,47 @@ export default function SettingsPage() {
       setMessage({ type: "error", text: "获取云文档列表失败" });
     } finally {
       setDocsLoading(false);
+    }
+  };
+
+  // 创建台账多维表
+  const createLedgerTable = async () => {
+    setCreatingLedger(true);
+    try {
+      const res = await fetch("/api/feishu/bitable/create-table", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          appToken: config.ledgerAppToken || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setConfig((prev) => ({
+          ...prev,
+          ledgerAppToken: data.data.appToken,
+          ledgerTableId: data.data.tableId,
+        }));
+        setLedgerCreated(true);
+        setMessage({ type: "success", text: "台账多维表创建成功！" });
+        // 自动保存配置
+        await fetch("/api/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...config,
+            ledgerAppToken: data.data.appToken,
+            ledgerTableId: data.data.tableId,
+            ledgerAutoSync: true,
+          }),
+        });
+      } else {
+        setMessage({ type: "error", text: data.error });
+      }
+    } catch {
+      setMessage({ type: "error", text: "创建台账失败" });
+    } finally {
+      setCreatingLedger(false);
     }
   };
 
@@ -842,6 +896,115 @@ export default function SettingsPage() {
           </Card>
         </>
       )}
+
+      {/* 产出物台账配置 */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Table className="w-4 h-4 text-amber-600" />
+            产出物台账
+          </CardTitle>
+          <p className="text-xs text-slate-500 mt-1">
+            平台生成的脚本、图片、视频等产出物自动同步到飞书多维表，形成完整的台账记录
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* 台账配置 */}
+          <div className="grid grid-cols-1 gap-3">
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">多维表 App Token</label>
+              <input
+                type="text"
+                value={config.ledgerAppToken}
+                onChange={(e) => setConfig({ ...config, ledgerAppToken: e.target.value })}
+                placeholder="bascnXXXXXX（从多维表 URL 中获取）"
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">数据表 Table ID</label>
+              <input
+                type="text"
+                value={config.ledgerTableId}
+                onChange={(e) => setConfig({ ...config, ledgerTableId: e.target.value })}
+                placeholder="tblXXXXXX"
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="ledgerAutoSync"
+                checked={config.ledgerAutoSync}
+                onChange={(e) => setConfig({ ...config, ledgerAutoSync: e.target.checked })}
+                className="w-4 h-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+              />
+              <label htmlFor="ledgerAutoSync" className="text-sm text-slate-700">
+                自动同步（生成脚本/图片/视频后自动写入台账）
+              </label>
+            </div>
+          </div>
+
+          {/* 操作按钮 */}
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              onClick={createLedgerTable}
+              disabled={creatingLedger || !connected}
+              className="px-4 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+            >
+              {creatingLedger ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Table className="w-4 h-4" />
+              )}
+              一键创建台账表
+            </button>
+            <button
+              onClick={saveConfig}
+              disabled={configSaving}
+              className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-50 inline-flex items-center gap-2"
+            >
+              <Save className="w-4 h-4" />
+              保存台账配置
+            </button>
+            {ledgerCreated && (
+              <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">
+                <CheckCircle2 className="w-3 h-3 mr-1" />
+                已创建
+              </Badge>
+            )}
+          </div>
+
+          {/* 台账字段说明 */}
+          <div className="p-4 bg-amber-50 rounded-lg border border-amber-100">
+            <h4 className="text-sm font-medium text-amber-900 mb-2">
+              台账字段说明
+            </h4>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-amber-800">
+              <span>内容类型（脚本/图片/视频）</span>
+              <span>标题</span>
+              <span>关联选题</span>
+              <span>目标平台（抖音/视频号/KILAKILA）</span>
+              <span>内容摘要</span>
+              <span>资源链接</span>
+              <span>预览图</span>
+              <span>生成模型</span>
+              <span>状态（草稿/待审核/已发布）</span>
+              <span>负责人</span>
+              <span>发布时间</span>
+              <span>播放量 / 点赞数 / 评论数 / 分享数</span>
+              <span>备注</span>
+              <span>创建时间</span>
+            </div>
+          </div>
+
+          {!connected && (
+            <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm text-slate-600">
+              请先连接飞书账号后再配置台账功能
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* 抖音集成 */}
       <Card className="mt-6">

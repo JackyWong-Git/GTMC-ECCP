@@ -15,6 +15,11 @@ export interface PlatformConfig {
     clientSecret: string;
     redirectUri: string;
   };
+  ledger: {
+    appToken: string;
+    tableId: string;
+    autoSync: boolean;
+  };
 }
 
 const DEFAULT_CONFIG: PlatformConfig = {
@@ -27,6 +32,11 @@ const DEFAULT_CONFIG: PlatformConfig = {
     clientKey: "",
     clientSecret: "",
     redirectUri: "",
+  },
+  ledger: {
+    appToken: "",
+    tableId: "",
+    autoSync: false,
   },
 };
 
@@ -77,6 +87,11 @@ export function getPlatformConfig(): PlatformConfig {
         process.env.DOUYIN_CLIENT_SECRET || fileConfig.douyin?.clientSecret || "",
       redirectUri:
         process.env.DOUYIN_REDIRECT_URI || fileConfig.douyin?.redirectUri || "",
+    },
+    ledger: {
+      appToken: fileConfig.ledger?.appToken || "",
+      tableId: fileConfig.ledger?.tableId || "",
+      autoSync: fileConfig.ledger?.autoSync ?? true,
     },
   };
 

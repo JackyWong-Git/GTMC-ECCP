@@ -1,8 +1,9 @@
 {
-  "feishu": {
-    "appId": "test_id",
-    "appSecret": "test_secret",
-    "redirectUri": "https://my-ecp.coze.site/api/feishu/callback"
-  },
-  "douyin": {}
+  "feishu": {},
+  "douyin": {},
+  "ledger": {
+    "appToken": "test_token",
+    "tableId": "test_table",
+    "autoSync": true
+  }
 }

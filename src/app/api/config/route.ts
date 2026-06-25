@@ -29,6 +29,12 @@ export async function GET() {
           redirectUri: config.douyin.redirectUri || "",
           isConfigured: !!(config.douyin.clientKey && config.douyin.clientSecret),
         },
+        ledger: {
+          appToken: config.ledger.appToken || "",
+          tableId: config.ledger.tableId || "",
+          autoSync: config.ledger.autoSync || false,
+          isConfigured: !!(config.ledger.appToken && config.ledger.tableId),
+        },
       },
     });
   } catch (error) {
@@ -59,6 +65,11 @@ export async function POST(request: NextRequest) {
       clientSecret: body.douyinClientSecret,
       redirectUri: body.douyinRedirectUri,
     };
+    const ledger = body.ledger ?? {
+      appToken: body.ledgerAppToken,
+      tableId: body.ledgerTableId,
+      autoSync: body.ledgerAutoSync,
+    };
 
     // 获取现有配置
     const currentConfig = getPlatformConfig();
@@ -72,6 +83,10 @@ export async function POST(request: NextRequest) {
       douyin: {
         ...currentConfig.douyin,
         ...douyin,
+      },
+      ledger: {
+        ...currentConfig.ledger,
+        ...ledger,
       },
     };
 
@@ -87,6 +102,10 @@ export async function POST(request: NextRequest) {
         },
         douyin: {
           isConfigured: !!(newConfig.douyin.clientKey && newConfig.douyin.clientSecret),
+        },
+        ledger: {
+          isConfigured: !!(newConfig.ledger.appToken && newConfig.ledger.tableId),
+          autoSync: newConfig.ledger.autoSync,
         },
       },
     });

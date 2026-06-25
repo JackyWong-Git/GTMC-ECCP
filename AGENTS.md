@@ -31,10 +31,30 @@
 │   │   ├── analytics/page.tsx    # 数据看板（播放/点赞/评论）
 │   │   ├── workflows/page.tsx    # 工作流管理（Coze工作流监控）
 │   │   ├── team/page.tsx         # 团队协作（飞书Bot集成）
+│   │   ├── settings/page.tsx     # 飞书集成设置（凭证+台账+数据源）
 │   │   └── api/                  # API 路由
 │   │       ├── analyze-topic/route.ts   # 选题热度分析（doubao-seed-2-0-lite）
 │   │       ├── generate-script/route.ts # 脚本大纲生成（qwen-3-5-plus，流式SSE）
-│   │       └── data-summary/route.ts    # 数据周报生成（doubao-seed-2-0-mini）
+│   │       ├── data-summary/route.ts    # 数据周报生成（doubao-seed-2-0-mini）
+│   │       ├── douyin-trending/route.ts # 抖音热榜实时抓取（Search + LLM）
+│   │       ├── import-data/route.ts     # CSV/JSON 数据导入
+│   │       ├── config/route.ts          # 平台配置 GET/POST（飞书/抖音/台账凭证）
+│   │       ├── feishu/                  # 飞书集成 API
+│   │       │   ├── auth/route.ts        # OAuth 登录发起
+│   │       │   ├── callback/route.ts    # OAuth 回调处理
+│   │       │   ├── status/route.ts      # 登录状态检查
+│   │       │   ├── sync/bitable/route.ts   # 多维表数据同步
+│   │       │   ├── sync/wiki/route.ts      # 知识库数据同步
+│   │       │   ├── sync/docs/route.ts      # 云文档数据同步
+│   │       │   ├── sync/contacts/route.ts  # 通讯录/团队成员同步
+│   │       │   └── bitable/
+│   │       │       ├── create-table/route.ts # 创建台账多维表（17字段）
+│   │       │       └── add-record/route.ts   # 向台账写入记录
+│   │       └── douyin/                  # 抖音集成 API
+│   │           ├── auth/route.ts        # OAuth 登录发起
+│   │           ├── callback/route.ts    # OAuth 回调处理
+│   │           ├── status/route.ts      # 登录状态检查
+│   │           └── sync/route.ts        # 视频数据同步
 │   ├── components/
 │   │   ├── layout/               # 布局组件
 │   │   │   ├── sidebar.tsx       # 侧边栏导航
@@ -43,7 +63,10 @@
 │   ├── hooks/                    # 自定义 Hooks
 │   ├── lib/                      # 工具库
 │   │   ├── utils.ts              # 通用工具函数 (cn)
-│   │   └── llm-config.ts         # LLM 多模型配置常量
+│   │   ├── llm-config.ts         # LLM 多模型配置常量
+│   │   ├── feishu-client.ts      # 飞书 API 客户端封装
+│   │   ├── douyin-client.ts      # 抖音开放平台 API 客户端封装
+│   │   └── platform-config.ts    # 平台配置存储工具（.platform-config.json）
 │   └── server.ts                 # 自定义服务端入口
 ├── DESIGN.md                     # 设计规范文件
 ├── next.config.ts                # Next.js 配置
