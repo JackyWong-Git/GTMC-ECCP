@@ -7,6 +7,8 @@ import {
   generateId,
   MODULE_TEMPLATES,
   type WorkflowDefinition,
+  type WorkflowModule,
+  type ModuleType,
 } from "@/lib/workflow-store";
 
 /** GET — 获取工作流列表或单个工作流 */
@@ -36,6 +38,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "工作流名称不能为空" }, { status: 400 });
     }
 
+    // Validate and sanitize modules
+    const validModuleTypes: string[] = [
+      "llm_analysis", "llm_generate", "llm_summary", "web_search",
+      "data_fetch", "feishu_write", "feishu_notify", "condition", "transform"
+    ];
+    const sanitizedModules: WorkflowModule[] = Array.isArray(modules)
+      ? modules.map((m: Record<string, unknown>) => ({
+          id: String(m.id || `mod_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`),
+          type: (validModuleTypes.includes(String(m.type)) ? m.type : "llm_analysis") as ModuleType,
+          name: String(m.name || "未命名模块"),
+          description: String(m.description || ""),
+          config: (m.config && typeof m.config === "object" ? m.config : {}) as Record<string, unknown>,
+          modelId: m.modelId ? String(m.modelId) : undefined,
+          prompt: m.prompt ? String(m.prompt) : undefined,
+          enabled: m.enabled !== false,
+        }))
+      : [];
+
     const now = new Date().toISOString();
 
     if (id) {
@@ -50,7 +70,7 @@ export async function POST(request: NextRequest) {
         description: description || "",
         trigger: trigger || existing.trigger,
         schedule: schedule || existing.schedule,
-        modules: modules || existing.modules,
+        modules: sanitizedModules.length > 0 ? sanitizedModules : existing.modules,
         status: status || existing.status,
         updatedAt: now,
       };
@@ -66,7 +86,7 @@ export async function POST(request: NextRequest) {
       status: "draft",
       trigger: trigger || "manual",
       schedule: schedule || "",
-      modules: modules || [],
+      modules: sanitizedModules,
       createdAt: now,
       updatedAt: now,
       runCount: 0,
@@ -74,8 +94,10 @@ export async function POST(request: NextRequest) {
     };
     saveWorkflow(newWorkflow);
     return NextResponse.json({ success: true, data: newWorkflow, message: "工作流已创建" });
-  } catch {
-    return NextResponse.json({ success: false, error: "请求格式错误" }, { status: 400 });
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : "未知错误";
+    console.error("Workflow save error:", errMsg);
+    return NextResponse.json({ success: false, error: `请求格式错误: ${errMsg}` }, { status: 400 });
   }
 }
 

@@ -263,17 +263,23 @@ function WorkflowEditorContent() {
           if (wf.name) setName(wf.name);
           if (wf.description) setDescription(wf.description);
           if (wf.trigger) setTrigger(wf.trigger);
-          if (wf.modules) {
-            const newNodes = wf.modules.map((m: Record<string, unknown>) => ({
-              id: `node_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-              type: m.type || 'llm_analysis',
-              name: m.name || '未命名模块',
-              description: m.description || '',
-              config: m.config || {},
-              modelId: m.modelId || '',
-              prompt: m.prompt || '',
-              enabled: m.enabled !== false,
-            }));
+          if (wf.modules && Array.isArray(wf.modules)) {
+            const validTypes = Object.keys(templates);
+            const newNodes = wf.modules.map((m: Record<string, unknown>) => {
+              const rawType = String(m.type || 'llm_analysis');
+              const nodeType = validTypes.includes(rawType) ? rawType : 'llm_analysis';
+              const template = templates[nodeType];
+              return {
+                id: `node_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                type: nodeType,
+                name: String(m.name || template?.name || '未命名模块'),
+                description: String(m.description || template?.description || ''),
+                config: (m.config && typeof m.config === 'object' ? m.config : {}) as Record<string, unknown>,
+                modelId: String(m.modelId || template?.modelId || ''),
+                prompt: String(m.prompt || template?.prompt || ''),
+                enabled: m.enabled !== false,
+              };
+            });
             setNodes(newNodes);
           }
         }
