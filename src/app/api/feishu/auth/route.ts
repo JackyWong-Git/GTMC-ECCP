@@ -9,10 +9,14 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const { redirectUri: configRedirectUri } = getAppCredentials();
+    const domain = process.env.COZE_PROJECT_DOMAIN_DEFAULT;
+    const defaultRedirectUri = domain
+      ? `https://${domain}/api/feishu/callback`
+      : `${request.nextUrl.origin}/api/feishu/callback`;
     const redirectUri =
       searchParams.get("redirect_uri") ||
       configRedirectUri ||
-      `${request.nextUrl.origin}/api/feishu/callback`;
+      defaultRedirectUri;
 
     const state = Math.random().toString(36).substring(2, 15);
     const authUrl = buildAuthUrl(redirectUri, state);

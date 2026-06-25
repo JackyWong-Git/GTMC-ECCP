@@ -20,7 +20,9 @@ export async function GET(request: NextRequest) {
     const session = await exchangeToken(code);
 
     // 重定向到设置页面，带上登录成功标识
-    const redirectUrl = new URL("/settings", request.nextUrl.origin);
+    const domain = process.env.COZE_PROJECT_DOMAIN_DEFAULT;
+    const origin = domain ? `https://${domain}` : request.nextUrl.origin;
+    const redirectUrl = new URL("/settings", origin);
     redirectUrl.searchParams.set("login", "success");
     redirectUrl.searchParams.set("user", session.userInfo.name);
 
@@ -30,7 +32,9 @@ export async function GET(request: NextRequest) {
       error instanceof Error ? error.message : "授权回调处理失败";
 
     // 重定向到设置页面，带上错误信息
-    const redirectUrl = new URL("/settings", request.nextUrl.origin);
+    const domain = process.env.COZE_PROJECT_DOMAIN_DEFAULT;
+    const origin = domain ? `https://${domain}` : request.nextUrl.origin;
+    const redirectUrl = new URL("/settings", origin);
     redirectUrl.searchParams.set("login", "error");
     redirectUrl.searchParams.set("error", message);
 
