@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import {
   Search,
   Filter,
@@ -16,6 +16,7 @@ import {
   Upload,
   Inbox,
   TrendingUp,
+  Cloud,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -101,7 +102,39 @@ export default function TopicsPage() {
   const [isImporting, setIsImporting] = useState(false);
   const [lastFetchedAt, setLastFetchedAt] = useState<string>('');
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [showWordCloud, setShowWordCloud] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Generate word cloud data from topics
+  const wordCloudData = useMemo(() => {
+    const wordFreq: Record<string, number> = {};
+    const stopWords = new Set(['的', '了', '是', '在', '和', '与', '为', '被', '把', '从', '到', '对', '等', '及', '或', '但', '不', '也', '都', '就', '会', '要', '有', '这', '那', '个', '上', '下', '中', '大', '小', '多', '少', '新', '旧', '好', '坏', '很', '最', '更', '再', '又', '还', '已', '已经', '正在', '可以', '能', '会', '将', '用', '以', '而', '之', '其', '于', '如', '何', '什么', '怎么', '为什么', '哪', '谁', '吗', '呢', '吧', '啊', '哦', '嗯', '哈', '嘿', '呀', '哇', '哎', '唉', '喂', '嗨', '噢', '喔', '嗯嗯', '好的', '是的', '不是', '没有', '有的', '一些', '一个', '这个', '那个', '这些', '那些', '自己', '别人', '大家', '我们', '你们', '他们', '她们', '它们', '你', '我', '他', '她', '它']);
+
+    topics.forEach((topic) => {
+      // Extract words from title
+      const titleWords = topic.title
+        .replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, ' ')
+        .split(/\s+/)
+        .filter((w) => w.length >= 2 && !stopWords.has(w));
+
+      titleWords.forEach((word) => {
+        wordFreq[word] = (wordFreq[word] || 0) + 1;
+      });
+
+      // Add tags
+      topic.tags.forEach((tag) => {
+        if (tag && tag.length >= 2 && !stopWords.has(tag)) {
+          wordFreq[tag] = (wordFreq[tag] || 0) + 2;
+        }
+      });
+    });
+
+    // Convert to array and sort by frequency
+    return Object.entries(wordFreq)
+      .map(([word, count]) => ({ word, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 50);
+  }, [topics]);
 
   const filteredTopics = topics.filter((topic) => {
     const matchesSearch = topic.title
@@ -331,6 +364,56 @@ export default function TopicsPage() {
               <SelectItem value="综合">综合</SelectItem>
             </SelectContent>
           </Select>
+          <Button
+            variant={showWordCloud ? 'default' : 'outline'}
+            size="sm"
+            className={`gap-1.5 text-xs ${showWordCloud ? 'bg-amber-500 text-white hover:bg-amber-600' : ''}`}
+            onClick={() => setShowWordCloud(!showWordCloud)}
+          >
+            <Cloud className="h-3.5 w-3.5" />
+            词云
+          </Button>
+        </div>
+      )}
+
+      {/* Word Cloud */}
+      {showWordCloud && wordCloudData.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-slate-700">热点词云</h3>
+            <Badge variant="outline" className="text-[10px] text-slate-400">
+              {wordCloudData.length} 个关键词
+            </Badge>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-2 min-h-[120px]">
+            {wordCloudData.map((item, idx) => {
+              const maxCount = wordCloudData[0]?.count || 1;
+              const ratio = item.count / maxCount;
+              const fontSize = Math.max(12, Math.min(36, 12 + ratio * 24));
+              const opacity = 0.4 + ratio * 0.6;
+              const colors = [
+                'text-amber-600',
+                'text-blue-600',
+                'text-violet-600',
+                'text-emerald-600',
+                'text-rose-600',
+                'text-cyan-600',
+                'text-orange-600',
+                'text-indigo-600',
+              ];
+              const color = colors[idx % colors.length];
+              return (
+                <span
+                  key={item.word}
+                  className={`${color} font-medium transition-all hover:scale-110 cursor-default`}
+                  style={{ fontSize: `${fontSize}px`, opacity }}
+                  title={`${item.word}: 出现 ${item.count} 次`}
+                >
+                  {item.word}
+                </span>
+              );
+            })}
+          </div>
         </div>
       )}
 

@@ -30,7 +30,7 @@
 │   │   ├── scripts/page.tsx      # 脚本工坊（AI脚本生成）
 │   │   ├── analytics/page.tsx    # 数据看板（播放/点赞/评论）
 │   │   ├── workflows/page.tsx    # 工作流管理（卡片式列表+执行监控）
-│   │   ├── workflows/create/page.tsx # 工作流编辑器（模块化编排+模型选择）
+│   │   ├── workflows/create/page.tsx # 工作流编辑器（可视化节点画布+AI助手）
 │   │   ├── team/page.tsx         # 团队协作（飞书Bot集成）
 │   │   ├── settings/page.tsx     # 飞书集成设置（凭证+台账+数据源）
 │   │   └── api/                  # API 路由
@@ -43,6 +43,7 @@
 │   │       ├── workflows/route.ts       # 工作流 CRUD（创建/编辑/删除）
 │   │       ├── workflows/run/route.ts   # 工作流执行引擎（逐模块串行）
 │   │       ├── workflows/templates/route.ts # 模块模板和模型列表
+│   │       ├── workflows/ai-assist/route.ts # AI 工作流助手（对话式生成工作流）
 │   │       ├── feishu/                  # 飞书集成 API
 │   │       │   ├── auth/route.ts        # OAuth 登录发起
 │   │       │   ├── callback/route.ts    # OAuth 回调处理
