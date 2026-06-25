@@ -1,0 +1,8 @@
+{
+  "feishu": {
+    "appId": "test_id",
+    "appSecret": "test_secret",
+    "redirectUri": "https://example.com/callback"
+  },
+  "douyin": {}
+}

@@ -18,6 +18,11 @@ import {
   ExternalLink,
   ChevronRight,
   Table,
+  Settings,
+  Key,
+  Save,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 interface FeishuUser {
@@ -52,11 +57,33 @@ interface DocItem {
   url: string;
 }
 
+interface PlatformConfig {
+  feishuAppId: string;
+  feishuAppSecret: string;
+  feishuRedirectUri: string;
+  douyinClientKey: string;
+  douyinClientSecret: string;
+  douyinRedirectUri: string;
+}
+
 export default function SettingsPage() {
   const [connected, setConnected] = useState(false);
   const [user, setUser] = useState<FeishuUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
+
+  // 平台凭证配置
+  const [config, setConfig] = useState<PlatformConfig>({
+    feishuAppId: "",
+    feishuAppSecret: "",
+    feishuRedirectUri: "",
+    douyinClientKey: "",
+    douyinClientSecret: "",
+    douyinRedirectUri: "",
+  });
+  const [configLoading, setConfigLoading] = useState(false);
+  const [configSaving, setConfigSaving] = useState(false);
+  const [showSecrets, setShowSecrets] = useState(false);
 
   // 多维表
   const [bitableAppToken, setBitableAppToken] = useState("");
@@ -77,6 +104,51 @@ export default function SettingsPage() {
 
   // 消息
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // 加载平台配置
+  const loadConfig = useCallback(async () => {
+    setConfigLoading(true);
+    try {
+      const res = await fetch("/api/config");
+      const data = await res.json();
+      if (data.success) {
+        setConfig({
+          feishuAppId: data.data.feishuAppId || "",
+          feishuAppSecret: data.data.feishuAppSecret || "",
+          feishuRedirectUri: data.data.feishuRedirectUri || "",
+          douyinClientKey: data.data.douyinClientKey || "",
+          douyinClientSecret: data.data.douyinClientSecret || "",
+          douyinRedirectUri: data.data.douyinRedirectUri || "",
+        });
+      }
+    } catch {
+      // ignore
+    } finally {
+      setConfigLoading(false);
+    }
+  }, []);
+
+  // 保存平台配置
+  const saveConfig = async () => {
+    setConfigSaving(true);
+    try {
+      const res = await fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(config),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessage({ type: "success", text: "凭证配置已保存" });
+      } else {
+        setMessage({ type: "error", text: data.error || "保存失败" });
+      }
+    } catch {
+      setMessage({ type: "error", text: "保存配置失败" });
+    } finally {
+      setConfigSaving(false);
+    }
+  };
 
   // 检查登录状态
   const checkStatus = useCallback(async () => {
@@ -99,6 +171,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     checkStatus();
+    loadConfig();
 
     // 检查 URL 参数
     const params = new URLSearchParams(window.location.search);
@@ -295,6 +368,132 @@ export default function SettingsPage() {
           </button>
         </div>
       )}
+
+      {/* 平台凭证配置 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Key className="w-4 h-4" />
+            平台凭证配置
+          </CardTitle>
+          <p className="text-xs text-slate-500 mt-1">
+            配置飞书和抖音的应用凭证，用于数据同步。凭证保存在服务端，不会泄露。
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* 飞书凭证 */}
+          <div>
+            <h3 className="text-sm font-medium text-slate-700 mb-3 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-blue-500" />
+              飞书开放平台
+            </h3>
+            <div className="grid grid-cols-1 gap-3">
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">App ID</label>
+                <input
+                  type="text"
+                  value={config.feishuAppId}
+                  onChange={(e) => setConfig({ ...config, feishuAppId: e.target.value })}
+                  placeholder="cli_xxxxxxxxxxxx"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">App Secret</label>
+                <div className="relative">
+                  <input
+                    type={showSecrets ? "text" : "password"}
+                    value={config.feishuAppSecret}
+                    onChange={(e) => setConfig({ ...config, feishuAppSecret: e.target.value })}
+                    placeholder="xxxxxxxxxxxxxxxxxxxxxxxx"
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 pr-16"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSecrets(!showSecrets)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
+                  >
+                    {showSecrets ? "隐藏" : "显示"}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">重定向 URI</label>
+                <input
+                  type="text"
+                  value={config.feishuRedirectUri}
+                  onChange={(e) => setConfig({ ...config, feishuRedirectUri: e.target.value })}
+                  placeholder="https://你的域名/api/feishu/callback"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* 抖音凭证 */}
+          <div>
+            <h3 className="text-sm font-medium text-slate-700 mb-3 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-pink-500" />
+              抖音开放平台
+            </h3>
+            <div className="grid grid-cols-1 gap-3">
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">Client Key</label>
+                <input
+                  type="text"
+                  value={config.douyinClientKey}
+                  onChange={(e) => setConfig({ ...config, douyinClientKey: e.target.value })}
+                  placeholder="xxxxxxxxxxxxxxxx"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">Client Secret</label>
+                <div className="relative">
+                  <input
+                    type={showSecrets ? "text" : "password"}
+                    value={config.douyinClientSecret}
+                    onChange={(e) => setConfig({ ...config, douyinClientSecret: e.target.value })}
+                    placeholder="xxxxxxxxxxxxxxxxxxxxxxxx"
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 pr-16"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSecrets(!showSecrets)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
+                  >
+                    {showSecrets ? "隐藏" : "显示"}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">重定向 URI</label>
+                <input
+                  type="text"
+                  value={config.douyinRedirectUri}
+                  onChange={(e) => setConfig({ ...config, douyinRedirectUri: e.target.value })}
+                  placeholder="https://你的域名/api/douyin/callback"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* 保存按钮 */}
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              onClick={saveConfig}
+              disabled={configSaving || configLoading}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {configSaving ? "保存中..." : "保存配置"}
+            </button>
+            <span className="text-xs text-slate-400">
+              配置保存在服务端 /tmp 目录，重启后需重新配置
+            </span>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* 飞书账号连接 */}
       <Card>

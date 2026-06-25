@@ -3,6 +3,8 @@
  * 文档: https://developer.open-douyin.com/docs/resource/zh-CN/dop/develop/openapi/account-permission/douyin-sso
  */
 
+import { getDouyinConfig } from "./platform-config";
+
 const DOUYIN_API_BASE = "https://open.douyin.com";
 
 // 内存存储（生产环境应使用数据库）
@@ -25,18 +27,19 @@ interface DouyinSession {
 let douyinSession: DouyinSession | null = null;
 
 /**
- * 获取抖音应用凭证
+ * 获取抖音应用凭证（从平台配置或环境变量读取）
  */
 function getDouyinCredentials(): {
   clientId: string;
   clientSecret: string;
   redirectUri: string;
 } {
-  const clientId = process.env.DOUYIN_CLIENT_KEY || "";
-  const clientSecret = process.env.DOUYIN_CLIENT_SECRET || "";
-  const redirectUri = process.env.DOUYIN_REDIRECT_URI || "";
-
-  return { clientId, clientSecret, redirectUri };
+  const config = getDouyinConfig();
+  return {
+    clientId: config.clientKey,
+    clientSecret: config.clientSecret,
+    redirectUri: config.redirectUri,
+  };
 }
 
 /**

@@ -3,6 +3,8 @@
  * 支持 OAuth2.0 用户授权、多维表/知识库/云文档数据同步
  */
 
+import { getFeishuConfig } from "./platform-config";
+
 const FEISHU_BASE = "https://open.feishu.cn/open-apis";
 
 // 内存存储（生产环境应使用数据库或 Redis）
@@ -21,20 +23,22 @@ interface FeishuSession {
 const sessions = new Map<string, FeishuSession>();
 
 /**
- * 获取飞书应用凭证（从环境变量读取）
+ * 获取飞书应用凭证（从平台配置或环境变量读取）
  */
 function getAppCredentials() {
-  const appId = process.env.FEISHU_APP_ID;
-  const appSecret = process.env.FEISHU_APP_SECRET;
+  const feishuConfig = getFeishuConfig();
+  const appId = feishuConfig.appId;
+  const appSecret = feishuConfig.appSecret;
+  const redirectUri = feishuConfig.redirectUri;
 
   if (!appId || !appSecret) {
     throw new Error(
-      "飞书应用凭证未配置。请在环境变量中设置 FEISHU_APP_ID 和 FEISHU_APP_SECRET。\n" +
+      "飞书应用凭证未配置。请在「飞书集成」设置页面配置 App ID 和 App Secret。\n" +
       "前往 https://open.feishu.cn/app 创建应用并获取凭证。"
     );
   }
 
-  return { appId, appSecret };
+  return { appId, appSecret, redirectUri };
 }
 
 /**
