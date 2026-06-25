@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Settings,
+  LayoutTemplate,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
@@ -23,6 +24,7 @@ const navItems = [
   { href: '/scripts', label: '脚本工坊', icon: FileText },
   { href: '/analytics', label: '数据看板', icon: BarChart3 },
   { href: '/workflows', label: '工作流', icon: Workflow },
+  { href: '/workflows/templates', label: '模板市场', icon: LayoutTemplate },
   { href: '/team', label: '团队协作', icon: Users },
   { href: '/settings', label: '飞书集成', icon: Settings },
 ];

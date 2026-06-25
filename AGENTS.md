@@ -31,6 +31,7 @@
 │   │   ├── analytics/page.tsx    # 数据看板（播放/点赞/评论）
 │   │   ├── workflows/page.tsx    # 工作流管理（卡片式列表+执行监控）
 │   │   ├── workflows/create/page.tsx # 工作流编辑器（可视化节点画布+AI助手）
+│   │   ├── workflows/templates/page.tsx # 模板市场（浏览+一键克隆）
 │   │   ├── team/page.tsx         # 团队协作（飞书Bot集成）
 │   │   ├── settings/page.tsx     # 飞书集成设置（凭证+台账+数据源）
 │   │   └── api/                  # API 路由
@@ -43,6 +44,7 @@
 │   │       ├── workflows/route.ts       # 工作流 CRUD（创建/编辑/删除）
 │   │       ├── workflows/run/route.ts   # 工作流执行引擎（逐模块串行）
 │   │       ├── workflows/templates/route.ts # 模块模板和模型列表
+│   │       ├── workflows/clone/route.ts     # 从模板克隆工作流
 │   │       ├── workflows/ai-assist/route.ts # AI 工作流助手（对话式生成工作流）
 │   │       ├── feishu/                  # 飞书集成 API
 │   │       │   ├── auth/route.ts        # OAuth 登录发起
@@ -72,7 +74,8 @@
 │   │   ├── feishu-client.ts      # 飞书 API 客户端封装
 │   │   ├── douyin-client.ts      # 抖音开放平台 API 客户端封装
 │   │   ├── platform-config.ts    # 平台配置存储工具（.platform-config.json）
-│   │   └── workflow-store.ts     # 工作流存储工具（.workflows.json）
+│   │   ├── workflow-store.ts     # 工作流存储工具（.workflows.json）
+│   │   └── workflow-templates.ts # 工作流模板库（5个预设模板）
 │   └── server.ts                 # 自定义服务端入口
 ├── DESIGN.md                     # 设计规范文件
 ├── next.config.ts                # Next.js 配置
