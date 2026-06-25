@@ -29,7 +29,8 @@
 │   │   ├── topics/page.tsx       # 选题池（多维表视图）
 │   │   ├── scripts/page.tsx      # 脚本工坊（AI脚本生成）
 │   │   ├── analytics/page.tsx    # 数据看板（播放/点赞/评论）
-│   │   ├── workflows/page.tsx    # 工作流管理（Coze工作流监控）
+│   │   ├── workflows/page.tsx    # 工作流管理（卡片式列表+执行监控）
+│   │   ├── workflows/create/page.tsx # 工作流编辑器（模块化编排+模型选择）
 │   │   ├── team/page.tsx         # 团队协作（飞书Bot集成）
 │   │   ├── settings/page.tsx     # 飞书集成设置（凭证+台账+数据源）
 │   │   └── api/                  # API 路由
@@ -39,6 +40,9 @@
 │   │       ├── douyin-trending/route.ts # 抖音热榜实时抓取（Search + LLM）
 │   │       ├── import-data/route.ts     # CSV/JSON 数据导入
 │   │       ├── config/route.ts          # 平台配置 GET/POST（飞书/抖音/台账凭证）
+│   │       ├── workflows/route.ts       # 工作流 CRUD（创建/编辑/删除）
+│   │       ├── workflows/run/route.ts   # 工作流执行引擎（逐模块串行）
+│   │       ├── workflows/templates/route.ts # 模块模板和模型列表
 │   │       ├── feishu/                  # 飞书集成 API
 │   │       │   ├── auth/route.ts        # OAuth 登录发起
 │   │       │   ├── callback/route.ts    # OAuth 回调处理
@@ -66,7 +70,8 @@
 │   │   ├── llm-config.ts         # LLM 多模型配置常量
 │   │   ├── feishu-client.ts      # 飞书 API 客户端封装
 │   │   ├── douyin-client.ts      # 抖音开放平台 API 客户端封装
-│   │   └── platform-config.ts    # 平台配置存储工具（.platform-config.json）
+│   │   ├── platform-config.ts    # 平台配置存储工具（.platform-config.json）
+│   │   └── workflow-store.ts     # 工作流存储工具（.workflows.json）
 │   └── server.ts                 # 自定义服务端入口
 ├── DESIGN.md                     # 设计规范文件
 ├── next.config.ts                # Next.js 配置

@@ -1,223 +1,349 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
-  Workflow,
+  Plus,
   Play,
   Pause,
-  Settings,
-  Clock,
+  Pencil,
+  Trash2,
   CheckCircle2,
   AlertCircle,
-  XCircle,
-  RefreshCw,
+  Loader2,
+  Clock,
   Zap,
-  ArrowRight,
+  MoreVertical,
+  ChevronDown,
+  ChevronUp,
   Activity,
-  Timer,
-  Database,
-  Globe,
-  Bot,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Switch } from '@/components/ui/switch';
 
-interface WorkflowConfig {
+interface WorkflowModule {
+  id: string;
+  type: string;
+  name: string;
+  enabled: boolean;
+}
+
+interface Workflow {
   id: string;
   name: string;
   description: string;
-  status: 'active' | 'paused' | 'error';
+  status: 'active' | 'paused' | 'draft';
   trigger: string;
-  schedule: string;
-  lastRun: string;
-  nextRun: string;
-  successRate: number;
-  totalRuns: number;
-  icon: typeof Workflow;
-  color: string;
-  nodes: string[];
+  schedule?: string;
+  modules: WorkflowModule[];
+  createdAt: string;
+  updatedAt: string;
+  lastRunAt?: string;
+  runCount: number;
+  successCount: number;
 }
 
-const workflows: WorkflowConfig[] = [
-  {
-    id: 'hot-topic',
-    name: '热点抓取流',
-    description: '定时抓取抖音/视频号热门内容，分析后自动写入飞书多维表',
-    status: 'active',
-    trigger: '定时触发',
-    schedule: '每2小时',
-    lastRun: '2024-12-19 14:00',
-    nextRun: '2024-12-19 16:00',
-    successRate: 99.2,
-    totalRuns: 1248,
-    icon: Globe,
-    color: 'text-amber-500',
-    nodes: ['定时触发器', '抖音热榜API', '视频号热榜API', 'AI内容分析', '飞书多维表写入'],
-  },
-  {
-    id: 'script-gen',
-    name: '脚本生成流',
-    description: '选中选题后自动调用大模型生成脚本大纲，存入飞书文档',
-    status: 'active',
-    trigger: '手动/事件触发',
-    schedule: '按需',
-    lastRun: '2024-12-19 13:45',
-    nextRun: '等待触发',
-    successRate: 97.8,
-    totalRuns: 356,
-    icon: Zap,
-    color: 'text-violet-500',
-    nodes: ['选题变更监听', '竞品内容分析', '大模型脚本生成', '飞书文档创建', '通知负责人'],
-  },
-  {
-    id: 'data-collect',
-    name: '数据回收流',
-    description: '定时抓取已发布视频的播放量、点赞、评论等数据汇总到多维表',
-    status: 'active',
-    trigger: '定时触发',
-    schedule: '每6小时',
-    lastRun: '2024-12-19 12:00',
-    nextRun: '2024-12-19 18:00',
-    successRate: 98.5,
-    totalRuns: 892,
-    icon: Database,
-    color: 'text-blue-500',
-    nodes: ['定时触发器', '抖音数据API', '视频号数据API', '数据清洗', '多维表更新'],
-  },
-  {
-    id: 'feishu-notify',
-    name: '飞书通知流',
-    description: '将工作流状态和关键事件推送到飞书群，支持手动触发',
-    status: 'error',
-    trigger: '事件触发',
-    schedule: '实时',
-    lastRun: '2024-12-19 13:30',
-    nextRun: '—',
-    successRate: 94.1,
-    totalRuns: 2156,
-    icon: Bot,
-    color: 'text-emerald-500',
-    nodes: ['事件监听', '消息格式化', '飞书Bot发送', '状态确认'],
-  },
-];
+interface RunLog {
+  id: string;
+  workflowId: string;
+  workflowName: string;
+  status: 'running' | 'success' | 'error';
+  startedAt: string;
+  finishedAt?: string;
+  moduleResults: {
+    moduleId: string;
+    moduleName: string;
+    status: string;
+    output?: string;
+    error?: string;
+    duration: number;
+  }[];
+  error?: string;
+}
 
-const recentLogs = [
-  { time: '14:00:12', workflow: '热点抓取流', status: 'success', message: '成功抓取 23 条热门内容，写入多维表' },
-  { time: '13:45:33', workflow: '脚本生成流', status: 'success', message: '为「智能家居设备」生成脚本大纲完成' },
-  { time: '13:30:08', workflow: '飞书通知流', status: 'error', message: '飞书Bot API 超时，重试中...' },
-  { time: '13:30:15', workflow: '飞书通知流', status: 'success', message: '重试成功，消息已推送到运营群' },
-  { time: '12:00:05', workflow: '数据回收流', status: 'success', message: '回收 15 个视频数据，更新多维表' },
-  { time: '10:00:11', workflow: '热点抓取流', status: 'success', message: '成功抓取 18 条热门内容，写入多维表' },
-  { time: '09:15:22', workflow: '脚本生成流', status: 'success', message: '为「沟通技巧」生成脚本大纲完成' },
-  { time: '08:00:03', workflow: '热点抓取流', status: 'success', message: '成功抓取 21 条热门内容，写入多维表' },
-];
+const statusConfig = {
+  active: { label: '运行中', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
+  paused: { label: '已暂停', color: 'bg-slate-100 text-slate-600 border-slate-200', icon: Pause },
+  draft: { label: '草稿', color: 'bg-amber-50 text-amber-700 border-amber-200', icon: Pencil },
+};
+
+const triggerLabels: Record<string, string> = {
+  manual: '手动触发',
+  schedule: '定时触发',
+  event: '事件触发',
+};
 
 export default function WorkflowsPage() {
-  const [selectedWorkflow, setSelectedWorkflow] = useState<WorkflowConfig>(
-    workflows[0]
-  );
+  const router = useRouter();
+  const [workflows, setWorkflows] = useState<Workflow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [runningId, setRunningId] = useState<string | null>(null);
+  const [runResult, setRunResult] = useState<{ workflowId: string; success: boolean; message: string } | null>(null);
+  const [expandedLog, setExpandedLog] = useState<string | null>(null);
+  const [logs, setLogs] = useState<RunLog[]>([]);
+  const [menuOpen, setMenuOpen] = useState<string | null>(null);
+
+  const fetchWorkflows = useCallback(async () => {
+    try {
+      const res = await fetch('/api/workflows');
+      const data = await res.json();
+      if (data.success) {
+        setWorkflows(data.data);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchWorkflows();
+  }, [fetchWorkflows]);
+
+  const handleRun = async (workflowId: string) => {
+    setRunningId(workflowId);
+    setRunResult(null);
+    try {
+      const res = await fetch('/api/workflows/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workflowId, input: '请开始执行工作流' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setRunResult({ workflowId, success: true, message: `执行完成，${data.data.moduleResults?.length || 0} 个模块已运行` });
+        fetchWorkflows();
+      } else {
+        setRunResult({ workflowId, success: false, message: data.error || '执行失败' });
+      }
+    } catch {
+      setRunResult({ workflowId, success: false, message: '请求失败' });
+    } finally {
+      setRunningId(null);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('确定删除此工作流？')) return;
+    try {
+      await fetch(`/api/workflows?id=${id}`, { method: 'DELETE' });
+      fetchWorkflows();
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleToggleStatus = async (workflow: Workflow) => {
+    const newStatus = workflow.status === 'active' ? 'paused' : 'active';
+    try {
+      await fetch('/api/workflows', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: workflow.id, name: workflow.name, status: newStatus }),
+      });
+      fetchWorkflows();
+    } catch {
+      // ignore
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">工作流管理</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Coze 工作流配置与监控 · 集成飞书群通知
+            创建和管理自动化工作流，编排 AI Agent 模块完成运营任务
           </p>
         </div>
-        <Button className="gap-2 bg-[#0F172A] text-white hover:bg-slate-800">
-          <Settings className="h-4 w-4" />
-          工作流配置
+        <Button
+          onClick={() => router.push('/workflows/create')}
+          className="gap-2 bg-[#0F172A] text-white hover:bg-slate-800"
+        >
+          <Plus className="h-4 w-4" />
+          新建工作流
         </Button>
       </div>
+
+      {/* Run Result Message */}
+      {runResult && (
+        <div
+          className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm ${
+            runResult.success
+              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+              : 'bg-red-50 text-red-700 border border-red-200'
+          }`}
+        >
+          {runResult.success ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+          {runResult.message}
+          <button onClick={() => setRunResult(null)} className="ml-auto text-slate-400 hover:text-slate-600">
+            &times;
+          </button>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {workflows.length === 0 && (
+        <Card className="border-dashed border-2 border-slate-200">
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+              <Zap className="w-8 h-8 text-slate-400" />
+            </div>
+            <h3 className="text-lg font-medium text-slate-700 mb-2">还没有工作流</h3>
+            <p className="text-sm text-slate-500 mb-6 text-center max-w-md">
+              创建一个工作流，将 AI 分析、内容生成、数据抓取等模块串联起来，实现运营自动化
+            </p>
+            <Button
+              onClick={() => router.push('/workflows/create')}
+              className="gap-2 bg-[#0F172A] text-white hover:bg-slate-800"
+            >
+              <Plus className="h-4 w-4" />
+              创建第一个工作流
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Workflow Cards */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {workflows.map((wf) => {
-          const Icon = wf.icon;
-          const isSelected = selectedWorkflow.id === wf.id;
+          const status = statusConfig[wf.status];
+          const StatusIcon = status.icon;
+          const successRate = wf.runCount > 0 ? Math.round((wf.successCount / wf.runCount) * 100) : 0;
+
           return (
             <Card
               key={wf.id}
-              className={`cursor-pointer border transition-all duration-200 hover:shadow-sm ${
-                isSelected
-                  ? 'border-slate-400 ring-1 ring-slate-200'
-                  : 'border-slate-200 hover:border-slate-300'
-              }`}
-              onClick={() => setSelectedWorkflow(wf)}
+              className="border border-slate-200 hover:border-slate-300 transition-all duration-200 hover:shadow-sm"
             >
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100">
-                      <Icon className={`h-5 w-5 ${wf.color}`} />
-                    </div>
-                    <div>
-                      <CardTitle className="text-sm font-semibold text-slate-800">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <CardTitle className="text-sm font-semibold text-slate-800 truncate">
                         {wf.name}
                       </CardTitle>
-                      <CardDescription className="mt-0.5 text-xs text-slate-400">
-                        {wf.trigger} · {wf.schedule}
-                      </CardDescription>
+                      <Badge className={`rounded-full text-[10px] ${status.color}`}>
+                        <StatusIcon className="mr-1 h-3 w-3" />
+                        {status.label}
+                      </Badge>
                     </div>
+                    <p className="text-xs text-slate-500 line-clamp-2">{wf.description}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {wf.status === 'active' ? (
-                      <Badge className="rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-100">
-                        <CheckCircle2 className="mr-1 h-3 w-3" />
-                        运行中
-                      </Badge>
-                    ) : wf.status === 'error' ? (
-                      <Badge className="rounded-full bg-red-50 text-red-700 hover:bg-red-100">
-                        <AlertCircle className="mr-1 h-3 w-3" />
-                        异常
-                      </Badge>
-                    ) : (
-                      <Badge className="rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200">
-                        <Pause className="mr-1 h-3 w-3" />
-                        已暂停
-                      </Badge>
+                  <div className="relative ml-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={() => setMenuOpen(menuOpen === wf.id ? null : wf.id)}
+                    >
+                      <MoreVertical className="h-4 w-4 text-slate-400" />
+                    </Button>
+                    {menuOpen === wf.id && (
+                      <div className="absolute right-0 top-8 z-10 w-36 bg-white border border-slate-200 rounded-lg shadow-lg py-1">
+                        <button
+                          onClick={() => { router.push(`/workflows/create?id=${wf.id}`); setMenuOpen(null); }}
+                          className="w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                        >
+                          <Pencil className="w-3 h-3" /> 编辑
+                        </button>
+                        <button
+                          onClick={() => { handleToggleStatus(wf); setMenuOpen(null); }}
+                          className="w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                        >
+                          {wf.status === 'active' ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+                          {wf.status === 'active' ? '暂停' : '启用'}
+                        </button>
+                        <button
+                          onClick={() => { handleDelete(wf.id); setMenuOpen(null); }}
+                          className="w-full px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50 flex items-center gap-2"
+                        >
+                          <Trash2 className="w-3 h-3" /> 删除
+                        </button>
+                      </div>
                     )}
-                    <Switch
-                      checked={wf.status === 'active'}
-                      className="scale-75"
-                    />
                   </div>
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="text-xs text-slate-500">{wf.description}</p>
-                <div className="mt-3 grid grid-cols-3 gap-3 border-t border-slate-100 pt-3">
+                {/* Module Preview */}
+                <div className="flex items-center gap-1 mb-3 overflow-x-auto pb-1">
+                  {wf.modules.slice(0, 5).map((mod, idx) => (
+                    <div key={mod.id} className="flex items-center gap-1">
+                      <span className={`text-[10px] px-2 py-1 rounded-md whitespace-nowrap ${mod.enabled ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-400'}`}>
+                        {mod.name}
+                      </span>
+                      {idx < Math.min(wf.modules.length, 5) - 1 && (
+                        <span className="text-slate-300 text-[10px]">&rarr;</span>
+                      )}
+                    </div>
+                  ))}
+                  {wf.modules.length > 5 && (
+                    <span className="text-[10px] text-slate-400">+{wf.modules.length - 5}</span>
+                  )}
+                </div>
+
+                {/* Stats */}
+                <div className="grid grid-cols-4 gap-2 border-t border-slate-100 pt-3">
                   <div>
-                    <p className="text-xs text-slate-400">成功率</p>
-                    <p className="text-sm font-semibold tabular-nums text-slate-800">
-                      {wf.successRate}%
-                    </p>
+                    <p className="text-[10px] text-slate-400">触发方式</p>
+                    <p className="text-xs font-medium text-slate-700">{triggerLabels[wf.trigger] || wf.trigger}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-400">总运行</p>
-                    <p className="text-sm font-semibold tabular-nums text-slate-800">
-                      {wf.totalRuns}
-                    </p>
+                    <p className="text-[10px] text-slate-400">模块数</p>
+                    <p className="text-xs font-medium text-slate-700 tabular-nums">{wf.modules.length}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-400">下次运行</p>
-                    <p className="text-sm font-semibold text-slate-800">
-                      {wf.nextRun === '—'
-                        ? '—'
-                        : wf.nextRun.split(' ')[1]}
-                    </p>
+                    <p className="text-[10px] text-slate-400">运行次数</p>
+                    <p className="text-xs font-medium text-slate-700 tabular-nums">{wf.runCount}</p>
                   </div>
+                  <div>
+                    <p className="text-[10px] text-slate-400">成功率</p>
+                    <p className="text-xs font-medium text-slate-700 tabular-nums">{wf.runCount > 0 ? `${successRate}%` : '—'}</p>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1 gap-1.5 text-xs"
+                    onClick={() => handleRun(wf.id)}
+                    disabled={runningId === wf.id || wf.modules.length === 0}
+                  >
+                    {runningId === wf.id ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Play className="h-3 w-3" />
+                    )}
+                    执行
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1 gap-1.5 text-xs"
+                    onClick={() => router.push(`/workflows/create?id=${wf.id}`)}
+                  >
+                    <Pencil className="h-3 w-3" />
+                    编辑
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -225,173 +351,77 @@ export default function WorkflowsPage() {
         })}
       </div>
 
-      {/* Selected Workflow Detail */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Workflow Nodes */}
-        <Card className="col-span-2 border-slate-200 bg-white">
+      {/* Recent Run Logs */}
+      {workflows.length > 0 && (
+        <Card className="border-slate-200">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-semibold text-slate-800">
-                {selectedWorkflow.name} — 节点流程
-              </CardTitle>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5 text-xs"
-              >
-                <Play className="h-3 w-3" />
-                手动触发
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2 overflow-x-auto pb-2">
-              {selectedWorkflow.nodes.map((node, idx) => (
-                <div key={node} className="flex items-center gap-2">
-                  <div className="flex min-w-[120px] items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <div
-                      className={`h-2 w-2 rounded-full ${
-                        selectedWorkflow.status === 'active'
-                          ? 'bg-emerald-500'
-                          : selectedWorkflow.status === 'error'
-                            ? 'bg-red-500'
-                            : 'bg-slate-400'
-                      }`}
-                    />
-                    <span className="text-xs font-medium text-slate-700">
-                      {node}
-                    </span>
-                  </div>
-                  {idx < selectedWorkflow.nodes.length - 1 && (
-                    <ArrowRight className="h-4 w-4 shrink-0 text-slate-300" />
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {/* Run Info */}
-            <div className="mt-4 grid grid-cols-2 gap-4 rounded-lg border border-slate-100 bg-slate-50 p-4">
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-slate-400" />
-                <div>
-                  <p className="text-xs text-slate-400">上次运行</p>
-                  <p className="text-sm font-medium text-slate-700">
-                    {selectedWorkflow.lastRun}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Timer className="h-4 w-4 text-slate-400" />
-                <div>
-                  <p className="text-xs text-slate-400">下次运行</p>
-                  <p className="text-sm font-medium text-slate-700">
-                    {selectedWorkflow.nextRun}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Recent Logs */}
-        <Card className="border-slate-200 bg-white">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-semibold text-slate-800">
+              <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                <Activity className="w-4 h-4 text-slate-400" />
                 运行日志
               </CardTitle>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 gap-1 text-xs text-slate-500"
-              >
-                <RefreshCw className="h-3 w-3" />
+              <Button variant="ghost" size="sm" className="h-7 text-xs text-slate-500" onClick={fetchWorkflows}>
                 刷新
               </Button>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="max-h-[320px] space-y-1 overflow-y-auto">
-              {recentLogs.map((log, idx) => (
-                <div
-                  key={idx}
-                  className="rounded-lg p-2.5 transition-colors hover:bg-slate-50"
-                >
-                  <div className="flex items-center gap-2">
-                    {log.status === 'success' ? (
-                      <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-500" />
-                    ) : (
-                      <XCircle className="h-3 w-3 shrink-0 text-red-500" />
-                    )}
-                    <span className="text-[10px] tabular-nums text-slate-400">
-                      {log.time}
-                    </span>
-                    <Badge
-                      variant="secondary"
-                      className="rounded-full px-1.5 py-0 text-[9px] text-slate-500"
+            {logs.length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-4">暂无运行记录，点击「执行」按钮运行工作流</p>
+            ) : (
+              <div className="max-h-[320px] space-y-1 overflow-y-auto">
+                {logs.map((log) => (
+                  <div key={log.id} className="rounded-lg border border-slate-100 overflow-hidden">
+                    <button
+                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left"
+                      onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}
                     >
-                      {log.workflow}
-                    </Badge>
+                      {log.status === 'success' ? (
+                        <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-500" />
+                      ) : log.status === 'error' ? (
+                        <AlertCircle className="h-3 w-3 shrink-0 text-red-500" />
+                      ) : (
+                        <Loader2 className="h-3 w-3 shrink-0 text-blue-500 animate-spin" />
+                      )}
+                      <span className="text-xs font-medium text-slate-700">{log.workflowName}</span>
+                      <span className="text-[10px] text-slate-400 tabular-nums">
+                        {new Date(log.startedAt).toLocaleTimeString()}
+                      </span>
+                      <span className="text-[10px] text-slate-400 ml-auto">
+                        {log.moduleResults.length} 个模块
+                      </span>
+                      {expandedLog === log.id ? (
+                        <ChevronUp className="h-3 w-3 text-slate-400" />
+                      ) : (
+                        <ChevronDown className="h-3 w-3 text-slate-400" />
+                      )}
+                    </button>
+                    {expandedLog === log.id && (
+                      <div className="border-t border-slate-100 px-3 py-2 bg-slate-50">
+                        {log.moduleResults.map((mr) => (
+                          <div key={mr.moduleId} className="flex items-center gap-2 py-1">
+                            {mr.status === 'success' ? (
+                              <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                            ) : (
+                              <AlertCircle className="h-3 w-3 text-red-500" />
+                            )}
+                            <span className="text-xs text-slate-700">{mr.moduleName}</span>
+                            <span className="text-[10px] text-slate-400 tabular-nums">{mr.duration}ms</span>
+                            {mr.error && <span className="text-[10px] text-red-500">{mr.error}</span>}
+                          </div>
+                        ))}
+                        {log.error && (
+                          <p className="text-xs text-red-600 mt-2 pt-2 border-t border-slate-200">{log.error}</p>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <p className="mt-1 pl-5 text-xs text-slate-600">
-                    {log.message}
-                  </p>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
-      </div>
-
-      {/* Integration Status */}
-      <Card className="border-slate-200 bg-white">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold text-slate-800">
-            集成状态
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div className="flex items-center gap-3 rounded-lg border border-slate-200 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50">
-                <Workflow className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-slate-800">
-                  Coze 工作流
-                </p>
-                <p className="text-xs text-emerald-600">已连接 · 4 个工作流</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 rounded-lg border border-slate-200 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-50">
-                <Database className="h-5 w-5 text-indigo-600" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-slate-800">
-                  飞书多维表
-                </p>
-                <p className="text-xs text-emerald-600">
-                  已连接 · 3 张数据表
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 rounded-lg border border-slate-200 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50">
-                <Bot className="h-5 w-5 text-emerald-600" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-slate-800">
-                  飞书 Bot
-                </p>
-                <p className="text-xs text-amber-600">
-                  连接不稳定 · 需检查配置
-                </p>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      )}
     </div>
   );
 }

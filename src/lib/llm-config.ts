@@ -36,6 +36,57 @@ export const MODEL_CONFIG = {
   },
 } as const;
 
+/**
+ * 用户可选模型列表 — 用于工作流编辑器中让用户选择模型
+ */
+export const AVAILABLE_MODELS = [
+  {
+    id: 'doubao-seed-2-0-lite-260215',
+    label: 'Doubao Seed 2.0 Lite',
+    provider: '字节跳动',
+    description: '高频调用，多模态支持，成本敏感场景首选',
+    category: '轻量分析',
+    temperature: 0.3,
+  },
+  {
+    id: 'doubao-seed-2-0-mini-260215',
+    label: 'Doubao Seed 2.0 Mini',
+    provider: '字节跳动',
+    description: '轻量文本汇总，低成本快速响应',
+    category: '快速摘要',
+    temperature: 0.2,
+  },
+  {
+    id: 'qwen-3-5-plus-260215',
+    label: 'Qwen 3.5 Plus',
+    provider: '阿里云',
+    description: '高质量中文长文本，核心创作和多模态理解',
+    category: '深度创作',
+    temperature: 0.7,
+  },
+  {
+    id: 'deepseek-v3-250324',
+    label: 'DeepSeek V3',
+    provider: 'DeepSeek',
+    description: '强推理能力，适合复杂分析和逻辑推理',
+    category: '逻辑推理',
+    temperature: 0.6,
+  },
+  {
+    id: 'kimi-latest',
+    label: 'Kimi Latest',
+    provider: '月之暗面',
+    description: '超长上下文支持，适合长文档分析和总结',
+    category: '长文本处理',
+    temperature: 0.5,
+  },
+] as const;
+
+/** 根据模型 ID 获取模型配置 */
+export function getModelById(modelId: string) {
+  return AVAILABLE_MODELS.find((m) => m.id === modelId) || AVAILABLE_MODELS[0];
+}
+
 /** System Prompts */
 export const SYSTEM_PROMPTS = {
   HOT_TOPIC_ANALYSIS: `你是一个专业的短视频内容分析师。你的任务是分析热门视频内容，提取关键信息并评估其作为选题的价值。
