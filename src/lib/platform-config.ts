@@ -20,6 +20,10 @@ export interface PlatformConfig {
     tableId: string;
     autoSync: boolean;
   };
+  llm: {
+    apiKey: string;
+    baseUrl: string;
+  };
 }
 
 const DEFAULT_CONFIG: PlatformConfig = {
@@ -37,6 +41,10 @@ const DEFAULT_CONFIG: PlatformConfig = {
     appToken: "",
     tableId: "",
     autoSync: false,
+  },
+  llm: {
+    apiKey: "",
+    baseUrl: "",
   },
 };
 
@@ -93,6 +101,12 @@ export function getPlatformConfig(): PlatformConfig {
       tableId: fileConfig.ledger?.tableId || "",
       autoSync: fileConfig.ledger?.autoSync ?? true,
     },
+    llm: {
+      apiKey:
+        process.env.OPENAI_API_KEY || fileConfig.llm?.apiKey || "",
+      baseUrl:
+        process.env.OPENAI_BASE_URL || fileConfig.llm?.baseUrl || "",
+    },
   };
 
   return config;
@@ -136,4 +150,38 @@ export function getDouyinConfig(): {
     ...config.douyin,
     isConfigured: !!(config.douyin.clientKey && config.douyin.clientSecret),
   };
+}
+
+/**
+ * 获取 LLM 配置（便捷方法）
+ * 返回 apiKey 和 baseUrl，用于初始化 coze-coding-dev-sdk 的 Config
+ */
+export function getLLMConfig(): {
+  apiKey: string;
+  baseUrl: string;
+  isConfigured: boolean;
+} {
+  const config = getPlatformConfig();
+  return {
+    ...config.llm,
+    isConfigured: !!config.llm.apiKey,
+  };
+}
+
+/**
+ * 创建 coze-coding-dev-sdk 的 Config 实例
+ * 自动从平台配置中读取 API Key 和 Base URL
+ * 通过设置环境变量传递给 SDK（Config 属性为 readonly）
+ */
+export function createLLMConfig(): import("coze-coding-dev-sdk").Config {
+  const { Config } = require("coze-coding-dev-sdk") as typeof import("coze-coding-dev-sdk");
+  const llmConfig = getLLMConfig();
+  // 设置环境变量供 SDK 读取（仅在未设置时覆盖）
+  if (llmConfig.apiKey && !process.env.OPENAI_API_KEY) {
+    process.env.OPENAI_API_KEY = llmConfig.apiKey;
+  }
+  if (llmConfig.baseUrl && !process.env.OPENAI_BASE_URL) {
+    process.env.OPENAI_BASE_URL = llmConfig.baseUrl;
+  }
+  return new Config();
 }

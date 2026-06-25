@@ -35,6 +35,11 @@ export async function GET() {
           autoSync: config.ledger.autoSync || false,
           isConfigured: !!(config.ledger.appToken && config.ledger.tableId),
         },
+        llm: {
+          apiKey: config.llm.apiKey ? "******" : "",
+          baseUrl: config.llm.baseUrl || "",
+          isConfigured: !!config.llm.apiKey,
+        },
       },
     });
   } catch (error) {
@@ -70,6 +75,10 @@ export async function POST(request: NextRequest) {
       tableId: body.ledgerTableId,
       autoSync: body.ledgerAutoSync,
     };
+    const llm = body.llm ?? {
+      apiKey: body.llmApiKey,
+      baseUrl: body.llmBaseUrl,
+    };
 
     // 获取现有配置
     const currentConfig = getPlatformConfig();
@@ -87,6 +96,10 @@ export async function POST(request: NextRequest) {
       ledger: {
         ...currentConfig.ledger,
         ...ledger,
+      },
+      llm: {
+        ...currentConfig.llm,
+        ...llm,
       },
     };
 
@@ -106,6 +119,9 @@ export async function POST(request: NextRequest) {
         ledger: {
           isConfigured: !!(newConfig.ledger.appToken && newConfig.ledger.tableId),
           autoSync: newConfig.ledger.autoSync,
+        },
+        llm: {
+          isConfigured: !!newConfig.llm.apiKey,
         },
       },
     });

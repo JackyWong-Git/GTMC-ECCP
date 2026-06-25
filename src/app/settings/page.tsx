@@ -67,6 +67,8 @@ interface PlatformConfig {
   ledgerAppToken: string;
   ledgerTableId: string;
   ledgerAutoSync: boolean;
+  llmApiKey: string;
+  llmBaseUrl: string;
 }
 
 export default function SettingsPage() {
@@ -86,6 +88,8 @@ export default function SettingsPage() {
     ledgerAppToken: "",
     ledgerTableId: "",
     ledgerAutoSync: true,
+    llmApiKey: "",
+    llmBaseUrl: "",
   });
   const [configLoading, setConfigLoading] = useState(false);
   const [configSaving, setConfigSaving] = useState(false);
@@ -122,16 +126,19 @@ export default function SettingsPage() {
       const res = await fetch("/api/config");
       const data = await res.json();
       if (data.success) {
+        const d = data.data;
         setConfig({
-          feishuAppId: data.data.feishuAppId || "",
-          feishuAppSecret: data.data.feishuAppSecret || "",
-          feishuRedirectUri: data.data.feishuRedirectUri || "",
-          douyinClientKey: data.data.douyinClientKey || "",
-          douyinClientSecret: data.data.douyinClientSecret || "",
-          douyinRedirectUri: data.data.douyinRedirectUri || "",
-          ledgerAppToken: data.data.ledgerAppToken || "",
-          ledgerTableId: data.data.ledgerTableId || "",
-          ledgerAutoSync: data.data.ledgerAutoSync !== false,
+          feishuAppId: d.feishu?.appId || d.feishuAppId || "",
+          feishuAppSecret: d.feishu?.appSecret || d.feishuAppSecret || "",
+          feishuRedirectUri: d.feishu?.redirectUri || d.feishuRedirectUri || "",
+          douyinClientKey: d.douyin?.clientKey || d.douyinClientKey || "",
+          douyinClientSecret: d.douyin?.clientSecret || d.douyinClientSecret || "",
+          douyinRedirectUri: d.douyin?.redirectUri || d.douyinRedirectUri || "",
+          ledgerAppToken: d.ledger?.appToken || d.ledgerAppToken || "",
+          ledgerTableId: d.ledger?.tableId || d.ledgerTableId || "",
+          ledgerAutoSync: d.ledger?.autoSync !== false,
+          llmApiKey: d.llm?.apiKey || d.llmApiKey || "",
+          llmBaseUrl: d.llm?.baseUrl || d.llmBaseUrl || "",
         });
       }
     } catch {
@@ -1062,6 +1069,80 @@ export default function SettingsPage() {
               </li>
               <li>申请权限：用户信息、视频列表、视频数据</li>
             </ol>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 大模型 API 配置 */}
+      <Card className="border border-slate-200 shadow-sm">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+            <Key className="w-5 h-5 text-violet-600" />
+            大模型 API 配置
+          </CardTitle>
+          <p className="text-sm text-slate-500 mt-1">
+            配置大模型 API 凭证，用于 AI 分析、脚本生成、数据摘要等功能。支持 OpenAI 兼容接口。
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">
+                API Key <span className="text-red-500">*</span>
+              </label>
+              <Input
+                type="password"
+                placeholder="sk-..."
+                value={config.llmApiKey}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfig({ ...config, llmApiKey: e.target.value })}
+              />
+              <p className="text-xs text-slate-500">
+                大模型服务的 API Key（必填）
+              </p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">
+                Base URL
+              </label>
+              <Input
+                type="text"
+                placeholder="https://api.openai.com/v1"
+                value={config.llmBaseUrl}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfig({ ...config, llmBaseUrl: e.target.value })}
+              />
+              <p className="text-xs text-slate-500">
+                API 服务地址（留空使用默认地址）
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={saveConfig}
+              disabled={configSaving}
+              className="px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+            >
+              <Save className="w-4 h-4" />
+              保存模型配置
+            </button>
+            {config.llmApiKey && (
+              <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">
+                <CheckCircle2 className="w-3 h-3 mr-1" />
+                已配置
+              </Badge>
+            )}
+          </div>
+
+          <div className="p-4 bg-violet-50 rounded-lg border border-violet-100">
+            <h4 className="text-sm font-medium text-violet-900 mb-2">
+              配置说明
+            </h4>
+            <ul className="text-xs text-violet-700 space-y-1 list-disc list-inside">
+              <li>支持 OpenAI 兼容接口（OpenAI、Azure、各类国产大模型）</li>
+              <li>也可通过环境变量 <code className="bg-violet-200 px-1 rounded">OPENAI_API_KEY</code> 配置</li>
+              <li>Base URL 可通过环境变量 <code className="bg-violet-200 px-1 rounded">OPENAI_BASE_URL</code> 配置</li>
+              <li>环境变量优先级高于页面配置</li>
+            </ul>
           </div>
         </CardContent>
       </Card>

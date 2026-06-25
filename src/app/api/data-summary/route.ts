@@ -35,18 +35,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 字段级校验，防止 toLocaleString 空指针
+    const safeMetrics = {
+      totalViews: Number(metrics.totalViews) || 0,
+      totalLikes: Number(metrics.totalLikes) || 0,
+      totalComments: Number(metrics.totalComments) || 0,
+      totalShares: Number(metrics.totalShares) || 0,
+      videoCount: Number(metrics.videoCount) || 0,
+      topVideos: Array.isArray(metrics.topVideos) ? metrics.topVideos : [],
+    };
+
     const customHeaders = HeaderUtils.extractForwardHeaders(request.headers);
     const config = new Config();
     const client = new LLMClient(config, customHeaders);
 
-    const topVideosText = metrics.topVideos
-      ? metrics.topVideos
+    const topVideosText = safeMetrics.topVideos.length > 0
+      ? safeMetrics.topVideos
           .map(
-            (v, i) =>
-              `  ${i + 1}. 「${v.title}」— 播放 ${v.views}，点赞 ${v.likes}`
+            (v: { title: string; views: number; likes: number }, i: number) =>
+              `  ${i + 1}. 「${v.title || '未命名'}」— 播放 ${Number(v.views) || 0}，点赞 ${Number(v.likes) || 0}`
           )
           .join('\n')
       : '暂无数据';
+
+    const interactionRate = safeMetrics.totalViews > 0
+      ? ((safeMetrics.totalLikes + safeMetrics.totalComments) / safeMetrics.totalViews * 100).toFixed(1)
+      : '0.0';
 
     const userContent = `请为以下运营数据生成摘要报告：
 
@@ -54,12 +68,12 @@ export async function POST(request: NextRequest) {
 统计周期：${period}
 
 核心数据：
-- 视频数量：${metrics.videoCount} 个
-- 总播放量：${metrics.totalViews.toLocaleString()}
-- 总点赞数：${metrics.totalLikes.toLocaleString()}
-- 总评论数：${metrics.totalComments.toLocaleString()}
-- 总分享数：${metrics.totalShares.toLocaleString()}
-- 平均互动率：${((metrics.totalLikes + metrics.totalComments) / metrics.totalViews * 100).toFixed(1)}%
+- 视频数量：${safeMetrics.videoCount} 个
+- 总播放量：${safeMetrics.totalViews.toLocaleString()}
+- 总点赞数：${safeMetrics.totalLikes.toLocaleString()}
+- 总评论数：${safeMetrics.totalComments.toLocaleString()}
+- 总分享数：${safeMetrics.totalShares.toLocaleString()}
+- 平均互动率：${interactionRate}%
 
 TOP 视频表现：
 ${topVideosText}

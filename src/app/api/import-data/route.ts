@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
       }
     } else if (contentType.includes("application/json")) {
       const body = await request.json();
-      const { data, format: inputFormat } = body as { data: string; format?: string };
+      const { data, format: inputFormat } = body as { data: unknown; format?: string };
 
       if (!data) {
         return NextResponse.json(
@@ -122,7 +122,18 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      text = data;
+      // 如果 data 是对象/数组，直接序列化为 JSON 字符串
+      if (typeof data === "object" && data !== null) {
+        text = JSON.stringify(data);
+      } else if (typeof data === "string") {
+        text = data;
+      } else {
+        return NextResponse.json(
+          { error: "data 字段应为 JSON 字符串或 JSON 对象/数组" },
+          { status: 400 }
+        );
+      }
+
       format = (inputFormat === "csv" ? "csv" : "json") as "csv" | "json";
     } else {
       return NextResponse.json(

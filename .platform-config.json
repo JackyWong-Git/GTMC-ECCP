@@ -1,9 +1,0 @@
-{
-  "feishu": {},
-  "douyin": {},
-  "ledger": {
-    "appToken": "test_token",
-    "tableId": "test_table",
-    "autoSync": true
-  }
-}
