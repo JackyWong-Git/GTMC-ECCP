@@ -25,7 +25,7 @@ const sessions = new Map<string, FeishuSession>();
 /**
  * 获取飞书应用凭证（从平台配置或环境变量读取）
  */
-function getAppCredentials() {
+export function getAppCredentials() {
   const feishuConfig = getFeishuConfig();
   const appId = feishuConfig.appId;
   const appSecret = feishuConfig.appSecret;
