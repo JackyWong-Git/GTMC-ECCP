@@ -62,12 +62,23 @@ export interface ModuleRunResult {
   duration: number;
 }
 
-const STORE_PATH = path.join(process.cwd(), ".workflows.json");
+/**
+ * 工作流存储文件路径
+ * 生产环境使用 /tmp（唯一可写目录），开发环境使用项目根目录
+ */
+function getStorePath(): string {
+  const isDev = process.env.NODE_ENV !== "production";
+  if (isDev) {
+    return path.join(process.cwd(), ".workflows.json");
+  }
+  return "/tmp/workflows.json";
+}
 
 function readStore(): { workflows: WorkflowDefinition[]; logs: WorkflowRunLog[] } {
+  const storePath = getStorePath();
   try {
-    if (fs.existsSync(STORE_PATH)) {
-      const raw = fs.readFileSync(STORE_PATH, "utf-8");
+    if (fs.existsSync(storePath)) {
+      const raw = fs.readFileSync(storePath, "utf-8");
       return JSON.parse(raw);
     }
   } catch {
@@ -77,7 +88,8 @@ function readStore(): { workflows: WorkflowDefinition[]; logs: WorkflowRunLog[] 
 }
 
 function writeStore(data: { workflows: WorkflowDefinition[]; logs: WorkflowRunLog[] }): void {
-  fs.writeFileSync(STORE_PATH, JSON.stringify(data, null, 2), "utf-8");
+  const storePath = getStorePath();
+  fs.writeFileSync(storePath, JSON.stringify(data, null, 2), "utf-8");
 }
 
 export function getWorkflows(): WorkflowDefinition[] {
