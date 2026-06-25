@@ -10,6 +10,8 @@ import {
 } from "@/lib/workflow-store";
 import { generateId } from "@/lib/workflow-store";
 import { getModelById } from "@/lib/llm-config";
+import { getSession } from "@/lib/feishu-client";
+import { getPlatformConfig } from "@/lib/platform-config";
 
 /** POST — 执行工作流 */
 export async function POST(request: NextRequest) {
@@ -156,12 +158,101 @@ async function executeModule(mod: WorkflowModule, input: string): Promise<string
     }
 
     case "feishu_write": {
-      // 飞书写入 — 需要飞书 token，此处记录操作
-      return `飞书写入操作已记录。输入数据长度：${input.length} 字符`;
+      // 飞书多维表写入 — 实际调用飞书 API
+      const session = getSession();
+      if (!session) {
+        throw new Error("未登录飞书，请先在设置页面连接飞书账号");
+      }
+
+      const config = getPlatformConfig();
+      const ledger = config.ledger;
+      const appToken = (mod.config?.appToken as string) || ledger?.appToken;
+      const tableId = (mod.config?.tableId as string) || ledger?.tableId;
+
+      if (!appToken || !tableId) {
+        throw new Error("未配置多维表，请先在设置页面配置台账 App Token 和 Table ID");
+      }
+
+      // 解析输入数据，尝试提取结构化字段
+      let title = (mod.config?.title as string) || "工作流产出";
+      let contentType = (mod.config?.contentType as string) || "脚本";
+      let summary = input.slice(0, 500);
+
+      // 尝试从输入中解析 JSON 数据
+      try {
+        const parsed = JSON.parse(input);
+        if (parsed.title) title = parsed.title;
+        if (parsed.contentType) contentType = parsed.contentType;
+        if (parsed.summary) summary = parsed.summary;
+        if (parsed.content) summary = parsed.content.slice(0, 500);
+      } catch {
+        // 非 JSON 格式，使用原始输入
+      }
+
+      const record = {
+        fields: {
+          "内容类型": contentType,
+          "标题": title,
+          "内容摘要": summary,
+          "创建时间": Date.now(),
+          "状态": "已生成",
+        },
+      };
+
+      const FEISHU_API_BASE = "https://open.feishu.cn/open-apis";
+      const res = await fetch(
+        `${FEISHU_API_BASE}/bitable/v1/apps/${appToken}/tables/${tableId}/records/batch_create`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.userAccessToken}`,
+          },
+          body: JSON.stringify({ records: [record] }),
+        }
+      );
+
+      const data = await res.json();
+      if (data.code !== 0) {
+        throw new Error(`飞书写入失败: ${data.msg || "未知错误"}`);
+      }
+
+      const recordIds = data.data?.records?.map(
+        (r: { record_id: string }) => r.record_id
+      ) || [];
+
+      return `成功写入 ${recordIds.length} 条记录到多维表台账，记录ID: ${recordIds.join(", ")}`;
     }
 
     case "feishu_notify": {
-      return `飞书通知已发送。通知内容：${input.slice(0, 200)}`;
+      // 飞书通知 — 通过飞书机器人发送消息
+      const session = getSession();
+      if (!session) {
+        throw new Error("未登录飞书，请先在设置页面连接飞书账号");
+      }
+
+      const webhookUrl = mod.config?.webhookUrl as string;
+      const notifyContent = input.slice(0, 2000);
+
+      if (webhookUrl) {
+        // 通过 Webhook 发送消息
+        const res = await fetch(webhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            msg_type: "text",
+            content: { text: notifyContent },
+          }),
+        });
+        const data = await res.json();
+        if (data.code !== 0 && data.StatusCode !== 0) {
+          throw new Error(`飞书通知发送失败: ${data.msg || "未知错误"}`);
+        }
+        return `飞书通知已发送到 Webhook`;
+      }
+
+      // 没有 Webhook 时，记录通知内容
+      return `飞书通知内容（未配置 Webhook）：${notifyContent.slice(0, 200)}`;
     }
 
     case "condition": {
