@@ -282,3 +282,18 @@ export function getDouyinStatus(): {
 export function disconnectDouyin(): void {
   douyinSession = null;
 }
+
+/**
+ * 根据 openId 获取抖音 session
+ */
+export function getDouyinSessionByOpenId(openId: string): DouyinSession | null {
+  if (!douyinSession || douyinSession.openId !== openId) {
+    return null;
+  }
+  const expiresAt = douyinSession.obtainedAt + douyinSession.expiresIn * 1000;
+  if (Date.now() > expiresAt) {
+    douyinSession = null;
+    return null;
+  }
+  return douyinSession;
+}

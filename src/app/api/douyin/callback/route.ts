@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exchangeDouyinToken, getDouyinUserInfo } from "@/lib/douyin-client";
+import { getPlatformConfig } from "@/lib/platform-config";
 
 /**
  * GET /api/douyin/callback
@@ -35,14 +36,32 @@ export async function GET(request: NextRequest) {
       // 用户信息获取失败不影响登录
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        openId: session.openId,
-        user: userInfo,
-        message: "抖音登录成功",
-      },
+    // 获取配置的 redirectUri 来提取 origin
+    const config = getPlatformConfig();
+    const redirectUri = config.douyin.redirectUri || process.env.DOUYIN_REDIRECT_URI;
+    let origin = '';
+    if (redirectUri) {
+      try {
+        origin = new URL(redirectUri).origin;
+      } catch {
+        origin = '';
+      }
+    }
+
+    // 创建重定向响应
+    const redirectUrl = origin ? `${origin}/` : '/';
+    const response = NextResponse.redirect(redirectUrl);
+
+    // 设置 session cookie（7天有效期）
+    response.cookies.set('douyin_session', session.openId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+      path: '/',
     });
+
+    return response;
   } catch (err) {
     const message = err instanceof Error ? err.message : "抖音登录失败";
     return NextResponse.json({ error: message }, { status: 500 });
