@@ -42,28 +42,19 @@ export async function GET(request: NextRequest) {
 
     const session = await exchangeToken(code);
 
-    // 重定向到首页（或原始请求的页面）
-    const redirectTo = searchParams.get("state") || "/";
-    const redirectUrl = new URL(redirectTo.startsWith("/") ? redirectTo : "/", origin);
+    // 重定向到设置页面，带上登录成功标识
+    const redirectUrl = new URL("/settings", origin);
+    redirectUrl.searchParams.set("login", "success");
+    redirectUrl.searchParams.set("user", session.userInfo.name);
 
-    // 创建响应并设置 session cookie
-    const response = NextResponse.redirect(redirectUrl);
-    const maxAge = Math.floor((session.expiresAt - Date.now()) / 1000);
-    response.cookies.set("feishu_session", session.userInfo.userId, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: maxAge > 0 ? maxAge : 3600,
-      path: "/",
-    });
-
-    return response;
+    return NextResponse.redirect(redirectUrl);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "授权回调处理失败";
 
-    // 重定向到登录页，带上错误信息
-    const redirectUrl = new URL("/login", origin);
+    // 重定向到设置页面，带上错误信息
+    const redirectUrl = new URL("/settings", origin);
+    redirectUrl.searchParams.set("login", "error");
     redirectUrl.searchParams.set("error", message);
 
     return NextResponse.redirect(redirectUrl);

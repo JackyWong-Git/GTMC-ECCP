@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
-import { SupabaseConfigProvider } from '@/lib/supabase-config-inject';
 
 export const metadata: Metadata = {
   title: {
@@ -21,15 +20,13 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body className="antialiased">
-        <SupabaseConfigProvider>
-          <div className="flex min-h-screen bg-[#F8FAFC]">
-            <Sidebar />
-            <div className="flex flex-1 flex-col pl-[240px]">
-              <Header />
-              <main className="flex-1 p-6">{children}</main>
-            </div>
+        <div className="flex min-h-screen bg-[#F8FAFC]">
+          <Sidebar />
+          <div className="flex flex-1 flex-col pl-[240px]">
+            <Header />
+            <main className="flex-1 p-6">{children}</main>
           </div>
-        </SupabaseConfigProvider>
+        </div>
       </body>
     </html>
   );

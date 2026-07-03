@@ -1,48 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { Bell, Search, RefreshCw, LogOut, Loader2 } from 'lucide-react';
+import { Bell, Search, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
-interface UserInfo {
-  name: string;
-  avatarUrl: string;
-  email: string;
-}
-
 export function Header() {
-  const router = useRouter();
-  const [user, setUser] = useState<UserInfo | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    checkAuth();
-  }, []);
-
-  async function checkAuth() {
-    try {
-      const res = await fetch('/api/feishu/status');
-      const data = await res.json();
-      if (data.success && data.data.connected) {
-        setUser(data.data.user);
-      }
-    } catch {
-      // ignore
-    }
-  }
-
-  async function handleLogout() {
-    setLoading(true);
-    try {
-      await fetch('/api/feishu/status', { method: 'DELETE' });
-      router.push('/login');
-    } catch {
-      setLoading(false);
-    }
-  }
-
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/80 px-6 backdrop-blur-sm">
       <div className="flex items-center gap-4">
@@ -73,43 +35,10 @@ export function Header() {
           <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-amber-500" />
         </Button>
         <div className="ml-2 flex items-center gap-2">
-          {user ? (
-            <>
-              {user.avatarUrl ? (
-                <img
-                  src={user.avatarUrl}
-                  alt={user.name}
-                  className="h-8 w-8 rounded-full object-cover"
-                />
-              ) : (
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-xs font-medium text-white">
-                  {user.name.charAt(0)}
-                </div>
-              )}
-              <span className="text-sm font-medium text-slate-700">{user.name}</span>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleLogout}
-                disabled={loading}
-                className="ml-1 h-8 w-8 text-slate-400 hover:text-red-500"
-                title="退出登录"
-              >
-                {loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <LogOut className="h-4 w-4" />
-                )}
-              </Button>
-            </>
-          ) : (
-            <>
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-xs font-medium text-white">
-                运
-              </div>
-              <span className="text-sm font-medium text-slate-700">运营团队</span>
-            </>
-          )}
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-xs font-medium text-white">
+            运
+          </div>
+          <span className="text-sm font-medium text-slate-700">运营团队</span>
         </div>
       </div>
     </header>

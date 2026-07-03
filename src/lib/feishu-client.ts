@@ -177,17 +177,6 @@ export function getSession(): FeishuSession | null {
 }
 
 /**
- * 根据用户 ID 获取 session
- */
-export function getSessionByUserId(userId: string): FeishuSession | null {
-  const session = sessions.get(userId);
-  if (session && session.expiresAt > Date.now()) {
-    return session;
-  }
-  return null;
-}
-
-/**
  * 清除登录状态
  */
 export function clearSession(): void {
