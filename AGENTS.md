@@ -38,7 +38,10 @@
 │   │       ├── analyze-topic/route.ts   # 选题热度分析（doubao-seed-2-0-lite）
 │   │       ├── generate-script/route.ts # 脚本大纲生成（qwen-3-5-plus，流式SSE）
 │   │       ├── data-summary/route.ts    # 数据周报生成（doubao-seed-2-0-mini）
-│   │       ├── douyin-trending/route.ts # 抖音热榜实时抓取（Search + LLM）
+│   │       ├── douyin-trending/route.ts # 热榜抓取（Search + LLM，支持自定义搜索词+本地缓存）
+│   │       ├── topic-analysis/route.ts  # 选题深度分析（内容摘要+受众画像+价值评分）
+│   │       ├── topic-keywords/route.ts  # 预设关键词库（汽车行业/微博热榜/行业报告/危机公关）
+│   │       ├── topic-cache/route.ts     # 选题缓存管理（读取缓存的热榜数据）
 │   │       ├── import-data/route.ts     # CSV/JSON 数据导入
 │   │       ├── config/route.ts          # 平台配置 GET/POST（飞书/抖音/台账凭证）
 │   │       ├── workflows/route.ts       # 工作流 CRUD（创建/编辑/删除）
@@ -75,7 +78,8 @@
 │   │   ├── douyin-client.ts      # 抖音开放平台 API 客户端封装
 │   │   ├── platform-config.ts    # 平台配置存储工具（.platform-config.json）
 │   │   ├── workflow-store.ts     # 工作流存储工具（.workflows.json）
-│   │   └── workflow-templates.ts # 工作流模板库（5个预设模板）
+│   │   ├── workflow-templates.ts # 工作流模板库（5个预设模板）
+│   │   └── topic-cache.ts      # 选题热榜缓存工具（本地 JSON 文件存储）
 │   └── server.ts                 # 自定义服务端入口
 ├── DESIGN.md                     # 设计规范文件
 ├── next.config.ts                # Next.js 配置

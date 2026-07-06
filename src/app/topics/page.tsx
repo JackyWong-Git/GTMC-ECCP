@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import {
   Search,
   Filter,
@@ -17,6 +17,12 @@ import {
   Inbox,
   TrendingUp,
   Cloud,
+  Database,
+  Target,
+  FileText,
+  Users,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -55,180 +61,240 @@ interface Topic {
   status: TopicStatus;
   assignee: string;
   publishDate: string;
-  sourceUrl: string;
   tags: string[];
+}
+
+interface TopicAnalysisResult {
+  summary: string;
+  audience: string[];
+  score: number;
+  suggestions: string[];
+  keywords: string[];
+}
+
+interface PresetKeyword {
+  label: string;
+  query: string;
+  icon: string;
 }
 
 const statusConfig: Record<
   TopicStatus,
-  { color: string; dot: string }
+  { color: string; dot: string; label: string }
 > = {
   选题评估: {
-    color: 'bg-blue-50 text-blue-700 border-blue-200',
-    dot: 'bg-blue-500',
+    color: 'border-amber-200 bg-amber-50 text-amber-700',
+    dot: 'bg-amber-400',
+    label: '选题评估',
   },
   脚本生成中: {
-    color: 'bg-violet-50 text-violet-700 border-violet-200',
-    dot: 'bg-violet-500',
+    color: 'border-violet-200 bg-violet-50 text-violet-700',
+    dot: 'bg-violet-400',
+    label: '脚本生成中',
   },
   待审核: {
-    color: 'bg-amber-50 text-amber-700 border-amber-200',
-    dot: 'bg-amber-500',
+    color: 'border-blue-200 bg-blue-50 text-blue-700',
+    dot: 'bg-blue-400',
+    label: '待审核',
   },
   拍摄中: {
-    color: 'bg-orange-50 text-orange-700 border-orange-200',
-    dot: 'bg-orange-500',
+    color: 'border-cyan-200 bg-cyan-50 text-cyan-700',
+    dot: 'bg-cyan-400',
+    label: '拍摄中',
   },
   已发布: {
-    color: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    dot: 'bg-emerald-500',
+    color: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    dot: 'bg-emerald-400',
+    label: '已发布',
   },
   已归档: {
-    color: 'bg-slate-50 text-slate-600 border-slate-200',
+    color: 'border-slate-200 bg-slate-50 text-slate-500',
     dot: 'bg-slate-400',
+    label: '已归档',
   },
 };
+
+const PRESET_KEYWORDS: PresetKeyword[] = [
+  { label: '汽车行业', query: '汽车行业 新能源 智能驾驶', icon: '🚗' },
+  { label: '行业危机', query: '汽车行业危机 公关 负面舆情', icon: '⚠️' },
+  { label: '微博汽车热榜', query: '微博 汽车热搜 话题榜', icon: '🔥' },
+  { label: '行业报告', query: '汽车行业报告 市场分析 销量数据', icon: '📊' },
+  { label: '新能源趋势', query: '新能源汽车 电池技术 充电桩', icon: '⚡' },
+  { label: '智能驾驶', query: '自动驾驶 智能座舱 ADAS', icon: '🤖' },
+];
 
 export default function TopicsPage() {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [platformFilter, setPlatformFilter] = useState<string>('all');
-  const [analyzingTopic, setAnalyzingTopic] = useState<Topic | null>(null);
-  const [analysisResult, setAnalysisResult] = useState<string>('');
-  const [analysisModel, setAnalysisModel] = useState<string>('');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const [lastFetchedAt, setLastFetchedAt] = useState<string>('');
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [lastFetchedAt, setLastFetchedAt] = useState<string | null>(null);
   const [showWordCloud, setShowWordCloud] = useState(false);
+  const [customQuery, setCustomQuery] = useState('');
+  const [showSearchPanel, setShowSearchPanel] = useState(false);
+  const [presetKeywords, setPresetKeywords] = useState<PresetKeyword[]>(PRESET_KEYWORDS);
+  const [isLoadingCache, setIsLoadingCache] = useState(false);
+  const [cacheInfo, setCacheInfo] = useState<{ count: number; fetchedAt: string } | null>(null);
+
+  // Topic analysis state
+  const [analyzingTopic, setAnalyzingTopic] = useState<Topic | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<TopicAnalysisResult | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisModel, setAnalysisModel] = useState('');
+  const [audienceFilter, setAudienceFilter] = useState<string>('all');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Generate word cloud data from topics
-  const wordCloudData = useMemo(() => {
-    const wordFreq: Record<string, number> = {};
-    const stopWords = new Set(['的', '了', '是', '在', '和', '与', '为', '被', '把', '从', '到', '对', '等', '及', '或', '但', '不', '也', '都', '就', '会', '要', '有', '这', '那', '个', '上', '下', '中', '大', '小', '多', '少', '新', '旧', '好', '坏', '很', '最', '更', '再', '又', '还', '已', '已经', '正在', '可以', '能', '会', '将', '用', '以', '而', '之', '其', '于', '如', '何', '什么', '怎么', '为什么', '哪', '谁', '吗', '呢', '吧', '啊', '哦', '嗯', '哈', '嘿', '呀', '哇', '哎', '唉', '喂', '嗨', '噢', '喔', '嗯嗯', '好的', '是的', '不是', '没有', '有的', '一些', '一个', '这个', '那个', '这些', '那些', '自己', '别人', '大家', '我们', '你们', '他们', '她们', '它们', '你', '我', '他', '她', '它']);
+  // Load cache info on mount
+  useEffect(() => {
+    loadCacheInfo();
+  }, []);
 
-    topics.forEach((topic) => {
-      // Extract words from title
-      const titleWords = topic.title
-        .replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, ' ')
-        .split(/\s+/)
-        .filter((w) => w.length >= 2 && !stopWords.has(w));
+  const loadCacheInfo = async () => {
+    try {
+      const res = await fetch('/api/topic-cache');
+      const data = await res.json();
+      if (data.success && data.data) {
+        setCacheInfo({ count: data.data.count, fetchedAt: data.data.fetchedAt });
+      }
+    } catch {
+      // ignore
+    }
+  };
 
-      titleWords.forEach((word) => {
-        wordFreq[word] = (wordFreq[word] || 0) + 1;
-      });
+  const handleLoadCache = async () => {
+    setIsLoadingCache(true);
+    try {
+      const res = await fetch('/api/topic-cache');
+      const data = await res.json();
+      if (data.success && data.data && data.data.topics.length > 0) {
+        setTopics(data.data.topics);
+        setLastFetchedAt(data.data.fetchedAt);
+      }
+    } catch (err) {
+      console.error('Failed to load cache:', err);
+    } finally {
+      setIsLoadingCache(false);
+    }
+  };
 
-      // Add tags
-      topic.tags.forEach((tag) => {
-        if (tag && tag.length >= 2 && !stopWords.has(tag)) {
-          wordFreq[tag] = (wordFreq[tag] || 0) + 2;
-        }
-      });
-    });
-
-    // Convert to array and sort by frequency
-    return Object.entries(wordFreq)
-      .map(([word, count]) => ({ word, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 50);
-  }, [topics]);
-
-  const filteredTopics = topics.filter((topic) => {
-    const matchesSearch = topic.title
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase());
-    const matchesStatus =
-      statusFilter === 'all' || topic.status === statusFilter;
-    const matchesPlatform =
-      platformFilter === 'all' || topic.platform === platformFilter;
-    return matchesSearch && matchesStatus && matchesPlatform;
-  });
-
-  const handleFetchTrending = async () => {
+  const handleFetchTrending = async (query?: string) => {
     setIsFetching(true);
     try {
-      const response = await fetch('/api/douyin-trending');
-      const data = await response.json();
-
-      if (data.success && data.data.topics) {
-        const newTopics: Topic[] = data.data.topics.map(
-          (item: {
-            rank: number;
-            title: string;
-            heatScore: number;
-            category: string;
-            source: string;
-            url?: string;
-            snippet?: string;
-          }, index: number) => ({
-            id: Date.now() + index,
+      const searchQuery = query || customQuery || undefined;
+      const url = searchQuery
+        ? `/api/douyin-trending?query=${encodeURIComponent(searchQuery)}`
+        : '/api/douyin-trending';
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.success && data.data) {
+        const newTopics: Topic[] = data.data.map(
+          (item: { title: string; heat: number; platform: string }, idx: number) => ({
+            id: Date.now() + idx,
             title: item.title,
-            platform: item.source || '抖音',
-            heat: item.heatScore || Math.floor(9000 - index * 300),
-            likes: 0,
-            comments: 0,
+            platform: item.platform || '抖音',
+            heat: item.heat || 0,
+            likes: Math.floor((item.heat || 0) * 0.08),
+            comments: Math.floor((item.heat || 0) * 0.02),
             status: '选题评估' as TopicStatus,
             assignee: '待分配',
             publishDate: new Date().toISOString().split('T')[0],
-            sourceUrl: item.url || '',
-            tags: [item.category || '热点', item.snippet ? '热门' : ''],
+            tags: [item.platform || '抖音', '热榜'],
           })
         );
-        setTopics((prev) => {
-          const existingTitles = new Set(prev.map((t) => t.title));
-          const uniqueNew = newTopics.filter(
-            (t: Topic) => !existingTitles.has(t.title)
-          );
-          return [...uniqueNew, ...prev];
-        });
-        setLastFetchedAt(new Date().toLocaleTimeString('zh-CN'));
+        setTopics((prev) => [...newTopics, ...prev]);
+        setLastFetchedAt(new Date().toLocaleString('zh-CN'));
+        loadCacheInfo();
       }
     } catch (err) {
-      console.error('抓取热榜失败:', err);
+      console.error('Failed to fetch trending:', err);
     } finally {
       setIsFetching(false);
     }
   };
 
-  const handleImportFile = async (file: File) => {
+  const handlePresetClick = (keyword: PresetKeyword) => {
+    setCustomQuery(keyword.query);
+    handleFetchTrending(keyword.query);
+  };
+
+  const handleAnalyzeTopic = async (topic: Topic) => {
+    setAnalyzingTopic(topic);
+    setIsAnalyzing(true);
+    setAnalysisResult(null);
+    setAnalysisModel('');
+
+    try {
+      const res = await fetch('/api/topic-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: topic.title,
+          platform: topic.platform,
+          heat: topic.heat,
+          likes: topic.likes,
+          comments: topic.comments,
+          tags: topic.tags,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setAnalysisResult(data.data);
+        setAnalysisModel(data.model || 'Doubao Seed 2.0 Lite');
+      }
+    } catch (err) {
+      console.error('Failed to analyze topic:', err);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const closeAnalysis = () => {
+    setAnalyzingTopic(null);
+    setAnalysisResult(null);
+    setAnalysisModel('');
+    setAudienceFilter('all');
+  };
+
+  const handleImportData = async (file: File) => {
     setIsImporting(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch('/api/import-data', {
+      const text = await file.text();
+      const format = file.name.endsWith('.csv') ? 'csv' : 'json';
+      const res = await fetch('/api/import-data', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: text, format }),
       });
-
-      const data = await response.json();
-
-      if (data.success && data.data.rows) {
-        const importedTopics: Topic[] = data.data.rows.map(
-          (row: Record<string, string | number | boolean | null>, index: number) => ({
-            id: Date.now() + index,
-            title: String(row['选题名称'] || row['title'] || row['名称'] || `导入选题 ${index + 1}`),
+      const data = await res.json();
+      if (data.success && data.data?.rows) {
+        const imported: Topic[] = data.data.rows.map(
+          (row: Record<string, string | number>, idx: number) => ({
+            id: Date.now() + idx,
+            title: String(row['选题名称'] || row['title'] || row['名称'] || '未命名选题'),
             platform: String(row['来源平台'] || row['platform'] || row['平台'] || '未知'),
             heat: Number(row['热度'] || row['heat'] || row['heatScore'] || 0),
             likes: Number(row['点赞'] || row['likes'] || 0),
             comments: Number(row['评论'] || row['comments'] || 0),
             status: (String(row['状态'] || row['status'] || '选题评估')) as TopicStatus,
             assignee: String(row['负责人'] || row['assignee'] || '待分配'),
-            publishDate: String(row['发布时间'] || row['publishDate'] || new Date().toISOString().split('T')[0]),
-            sourceUrl: String(row['链接'] || row['url'] || ''),
+            publishDate: String(
+              row['发布时间'] || row['publishDate'] || new Date().toISOString().split('T')[0]
+            ),
             tags: String(row['标签'] || row['tags'] || '')
-              .split(/[,，、]/)
+              .split(',')
+              .map((t: string) => t.trim())
               .filter(Boolean),
           })
         );
-        setTopics((prev) => [...importedTopics, ...prev]);
+        setTopics((prev) => [...imported, ...prev]);
         setShowImportDialog(false);
       }
     } catch (err) {
-      console.error('导入数据失败:', err);
+      console.error('Failed to import:', err);
     } finally {
       setIsImporting(false);
     }
@@ -237,52 +303,54 @@ export default function TopicsPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      handleImportFile(file);
-    }
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      handleImportData(file);
     }
   };
 
-  const handleAnalyzeTopic = async (topic: Topic) => {
-    setAnalyzingTopic(topic);
-    setAnalysisResult('');
-    setAnalysisModel('');
-    setIsAnalyzing(true);
-
-    try {
-      const response = await fetch('/api/analyze-topic', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topicTitle: topic.title,
-          platform: topic.platform,
-          heatData: `热度 ${topic.heat}，点赞 ${topic.likes}，评论 ${topic.comments}`,
-        }),
+  // Word cloud data extraction
+  const wordCloudData = useMemo(() => {
+    const wordFreq: Record<string, number> = {};
+    topics.forEach((topic) => {
+      topic.tags.forEach((tag) => {
+        if (tag && tag.length > 1) {
+          wordFreq[tag] = (wordFreq[tag] || 0) + 1;
+        }
       });
+      const words = topic.title
+        .replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter((w) => w.length >= 2);
+      words.forEach((word) => {
+        wordFreq[word] = (wordFreq[word] || 0) + 1;
+      });
+    });
+    return Object.entries(wordFreq)
+      .map(([word, count]) => ({ word, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 50);
+  }, [topics]);
 
-      const data = await response.json();
+  const filteredTopics = useMemo(() => {
+    return topics.filter((topic) => {
+      const matchesSearch =
+        !searchQuery ||
+        topic.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        topic.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()));
+      const matchesStatus = statusFilter === 'all' || topic.status === statusFilter;
+      const matchesPlatform =
+        platformFilter === 'all' || topic.platform === platformFilter;
+      return matchesSearch && matchesStatus && matchesPlatform;
+    });
+  }, [topics, searchQuery, statusFilter, platformFilter]);
 
-      if (data.success) {
-        setAnalysisResult(data.data.analysis);
-        setAnalysisModel(data.data.model);
-      } else {
-        setAnalysisResult(`分析失败：${data.error || '未知错误'}`);
-      }
-    } catch (err) {
-      setAnalysisResult(
-        `请求失败：${err instanceof Error ? err.message : '网络错误'}`
-      );
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
-  const closeAnalysis = () => {
-    setAnalyzingTopic(null);
-    setAnalysisResult('');
-    setAnalysisModel('');
-  };
+  // Filter analysis audience
+  const filteredAudience = useMemo(() => {
+    if (!analysisResult) return [];
+    if (audienceFilter === 'all') return analysisResult.audience;
+    return analysisResult.audience.filter((a) =>
+      a.toLowerCase().includes(audienceFilter.toLowerCase())
+    );
+  }, [analysisResult, audienceFilter]);
 
   return (
     <div className="space-y-6">
@@ -293,10 +361,26 @@ export default function TopicsPage() {
           <p className="mt-1 text-sm text-slate-500">
             {topics.length > 0
               ? `共 ${topics.length} 个选题${lastFetchedAt ? ` · 上次抓取 ${lastFetchedAt}` : ''}`
-              : '抓取热榜或导入数据开始使用'}
+              : '搜索热点、抓取热榜或导入数据开始使用'}
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {cacheInfo && cacheInfo.count > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-xs"
+              onClick={handleLoadCache}
+              disabled={isLoadingCache}
+            >
+              {isLoadingCache ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Database className="h-3.5 w-3.5" />
+              )}
+              加载缓存 ({cacheInfo.count})
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -308,8 +392,17 @@ export default function TopicsPage() {
             导入数据
           </Button>
           <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 text-xs"
+            onClick={() => setShowSearchPanel(!showSearchPanel)}
+          >
+            <Search className="h-3.5 w-3.5" />
+            选题搜索
+          </Button>
+          <Button
             className="gap-2 bg-[#0F172A] text-white hover:bg-slate-800"
-            onClick={handleFetchTrending}
+            onClick={() => handleFetchTrending()}
             disabled={isFetching}
           >
             {isFetching ? (
@@ -321,6 +414,77 @@ export default function TopicsPage() {
           </Button>
         </div>
       </div>
+
+      {/* Search Panel */}
+      {showSearchPanel && (
+        <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+              <Target className="h-4 w-4 text-amber-500" />
+              选题搜索
+            </h3>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 text-slate-400"
+              onClick={() => setShowSearchPanel(false)}
+            >
+              <ChevronUp className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* Custom search input */}
+          <div className="flex items-center gap-2 mb-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                placeholder="输入自定义搜索词，如：比亚迪 新能源 SUV..."
+                value={customQuery}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setCustomQuery(e.target.value)
+                }
+                onKeyDown={(e: React.KeyboardEvent) => {
+                  if (e.key === 'Enter' && customQuery.trim()) {
+                    handleFetchTrending(customQuery.trim());
+                  }
+                }}
+                className="h-10 rounded-lg border-slate-200 bg-slate-50 pl-9 text-sm"
+              />
+            </div>
+            <Button
+              size="sm"
+              className="gap-1.5 bg-amber-500 text-white hover:bg-amber-600"
+              onClick={() => handleFetchTrending(customQuery.trim())}
+              disabled={isFetching || !customQuery.trim()}
+            >
+              {isFetching ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Search className="h-3.5 w-3.5" />
+              )}
+              搜索
+            </Button>
+          </div>
+
+          {/* Preset keywords */}
+          <div>
+            <p className="text-xs text-slate-500 mb-2">预设关键词（点击直接搜索）</p>
+            <div className="flex flex-wrap gap-2">
+              {presetKeywords.map((kw) => (
+                <button
+                  key={kw.label}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-700 transition-all hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700"
+                  onClick={() => handlePresetClick(kw)}
+                  disabled={isFetching}
+                >
+                  <span>{kw.icon}</span>
+                  <span>{kw.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       {topics.length > 0 && (
@@ -427,9 +591,18 @@ export default function TopicsPage() {
             选题池为空
           </h3>
           <p className="mt-1.5 max-w-sm text-center text-sm text-slate-400">
-            点击「抓取热榜」自动获取抖音/视频号热门话题，或点击「导入数据」上传 CSV/JSON 格式的选题数据
+            使用「选题搜索」查找特定话题，或点击「抓取热榜」获取热门话题，也可「导入数据」上传已有选题
           </p>
           <div className="mt-6 flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-xs"
+              onClick={() => setShowSearchPanel(true)}
+            >
+              <Search className="h-3.5 w-3.5" />
+              选题搜索
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -441,7 +614,7 @@ export default function TopicsPage() {
             </Button>
             <Button
               className="gap-2 bg-[#0F172A] text-white hover:bg-slate-800"
-              onClick={handleFetchTrending}
+              onClick={() => handleFetchTrending()}
             >
               <TrendingUp className="h-4 w-4" />
               抓取热榜
@@ -572,7 +745,7 @@ export default function TopicsPage() {
                           disabled={isAnalyzing}
                         >
                           <Sparkles className="h-3 w-3" />
-                          AI 分析
+                          分析
                         </Button>
                         <Button
                           variant="ghost"
@@ -684,10 +857,10 @@ export default function TopicsPage() {
         </div>
       )}
 
-      {/* AI Analysis Dialog */}
+      {/* Topic Analysis Dialog */}
       {analyzingTopic && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-2xl">
+          <div className="mx-4 w-full max-w-3xl rounded-xl border border-slate-200 bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50">
@@ -695,7 +868,7 @@ export default function TopicsPage() {
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-slate-900">
-                    AI 选题分析
+                    选题分析
                   </h3>
                   <p className="text-xs text-slate-400">
                     {analyzingTopic.title} · {analyzingTopic.platform}
@@ -712,7 +885,7 @@ export default function TopicsPage() {
               </Button>
             </div>
 
-            <div className="max-h-[480px] overflow-y-auto px-6 py-5">
+            <div className="max-h-[520px] overflow-y-auto px-6 py-5">
               {isAnalyzing ? (
                 <div className="flex flex-col items-center justify-center py-12">
                   <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
@@ -720,24 +893,134 @@ export default function TopicsPage() {
                     AI 正在分析选题价值...
                   </p>
                   <p className="mt-1 text-xs text-slate-400">
-                    使用 Doubao Seed 2.0 Lite · 分析热度因素、受众画像与选题建议
+                    分析内容摘要、受众画像与选题建议
                   </p>
                 </div>
-              ) : (
-                <div>
-                  <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
-                    {analysisResult}
+              ) : analysisResult ? (
+                <div className="space-y-5">
+                  {/* Score */}
+                  <div className="flex items-center gap-4 rounded-lg bg-gradient-to-r from-amber-50 to-orange-50 p-4">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white shadow-sm">
+                      <span className="text-2xl font-bold text-amber-600">
+                        {analysisResult.score}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">选题价值评分</p>
+                      <p className="text-xs text-slate-500">
+                        {analysisResult.score >= 80
+                          ? '高价值选题，建议优先推进'
+                          : analysisResult.score >= 60
+                            ? '中等价值，可考虑优化角度'
+                            : '价值较低，建议更换选题'}
+                      </p>
+                    </div>
                   </div>
+
+                  {/* Summary */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <FileText className="h-4 w-4 text-blue-500" />
+                      <h4 className="text-sm font-semibold text-slate-700">内容摘要</h4>
+                    </div>
+                    <p className="text-sm leading-relaxed text-slate-600 bg-slate-50 rounded-lg p-3">
+                      {analysisResult.summary}
+                    </p>
+                  </div>
+
+                  {/* Keywords */}
+                  {analysisResult.keywords.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-slate-700 mb-2">关键词</h4>
+                      <div className="flex flex-wrap gap-1.5">
+                        {analysisResult.keywords.map((kw) => (
+                          <Badge
+                            key={kw}
+                            variant="outline"
+                            className="rounded-full border-amber-200 bg-amber-50 text-xs text-amber-700"
+                          >
+                            {kw}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Audience */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4 text-violet-500" />
+                        <h4 className="text-sm font-semibold text-slate-700">目标受众</h4>
+                      </div>
+                      <Select value={audienceFilter} onValueChange={setAudienceFilter}>
+                        <SelectTrigger className="h-7 w-[120px] rounded-md border-slate-200 text-xs">
+                          <SelectValue placeholder="筛选受众" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">全部受众</SelectItem>
+                          <SelectItem value="年轻">年轻群体</SelectItem>
+                          <SelectItem value="女性">女性用户</SelectItem>
+                          <SelectItem value="男性">男性用户</SelectItem>
+                          <SelectItem value="家庭">家庭用户</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {filteredAudience.map((aud) => (
+                        <div
+                          key={aud}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs text-violet-700"
+                        >
+                          <User className="h-3 w-3" />
+                          {aud}
+                        </div>
+                      ))}
+                      {filteredAudience.length === 0 && (
+                        <p className="text-xs text-slate-400">无匹配受众</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Suggestions */}
+                  {analysisResult.suggestions.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Target className="h-4 w-4 text-emerald-500" />
+                        <h4 className="text-sm font-semibold text-slate-700">优化建议</h4>
+                      </div>
+                      <ul className="space-y-2">
+                        {analysisResult.suggestions.map((sug, idx) => (
+                          <li
+                            key={idx}
+                            className="flex items-start gap-2 text-sm text-slate-600"
+                          >
+                            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-medium text-emerald-600">
+                              {idx + 1}
+                            </span>
+                            {sug}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Model info */}
                   {analysisModel && (
-                    <div className="mt-4 flex items-center gap-2 border-t border-slate-100 pt-3">
+                    <div className="flex items-center gap-2 border-t border-slate-100 pt-3">
                       <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
                         {analysisModel}
                       </span>
                       <span className="text-[10px] text-slate-400">
-                        热点内容分析模型
+                        选题分析模型
                       </span>
                     </div>
                   )}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                  <Sparkles className="h-8 w-8 mb-2" />
+                  <p className="text-sm">分析失败，请重试</p>
                 </div>
               )}
             </div>
@@ -751,7 +1034,7 @@ export default function TopicsPage() {
               >
                 关闭
               </Button>
-              {!isAnalyzing && analysisResult && (
+              {!isAnalyzing && (
                 <Button
                   size="sm"
                   className="gap-1.5 bg-amber-500 text-xs text-white hover:bg-amber-600"
