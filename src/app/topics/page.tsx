@@ -188,9 +188,20 @@ export default function TopicsPage() {
       const url = searchQuery
         ? `/api/douyin-trending?query=${encodeURIComponent(searchQuery)}`
         : '/api/douyin-trending';
-      const res = await fetch(url);
+      
+      // Add timeout for long-running requests
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+      
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+      
       const data = await res.json();
-      if (data.success && data.data) {
+      if (data.success && data.data && data.data.length > 0) {
         const newTopics: Topic[] = data.data.map(
           (item: { title: string; heat: number; platform: string }, idx: number) => ({
             id: Date.now() + idx,
@@ -208,9 +219,17 @@ export default function TopicsPage() {
         setTopics((prev) => [...newTopics, ...prev]);
         setLastFetchedAt(new Date().toLocaleString('zh-CN'));
         loadCacheInfo();
+      } else {
+        console.warn('No topics returned from API:', data);
+        alert('未搜索到相关选题，请尝试其他关键词或稍后重试');
       }
     } catch (err) {
       console.error('Failed to fetch trending:', err);
+      if (err instanceof Error && err.name === 'AbortError') {
+        alert('搜索超时，请稍后重试或尝试更简短的关键词');
+      } else {
+        alert('搜索失败，请检查网络连接后重试');
+      }
     } finally {
       setIsFetching(false);
     }

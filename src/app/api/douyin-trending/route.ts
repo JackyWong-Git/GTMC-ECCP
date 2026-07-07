@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { SearchClient, Config, HeaderUtils, LLMClient } from "coze-coding-dev-sdk";
 import { MODEL_CONFIG } from "@/lib/llm-config";
 import { saveTopicCache } from "@/lib/topic-cache";
+import { setupLLMEnv } from "@/lib/platform-config";
 
 interface TrendingTopic {
   rank: number;
@@ -52,6 +53,9 @@ export async function GET(request: NextRequest) {
     const source = searchParams.get("source") || "douyin";
     const count = parseInt(searchParams.get("count") || "20", 10);
 
+    // 设置 LLM 环境变量
+    setupLLMEnv();
+
     const customHeaders = HeaderUtils.extractForwardHeaders(request.headers);
     const config = new Config();
     const searchClient = new SearchClient(config, customHeaders);
@@ -59,7 +63,7 @@ export async function GET(request: NextRequest) {
     const response = await searchClient.advancedSearch(query, {
       searchType: "web",
       count,
-      timeRange: "1d",
+      timeRange: "1w",
       needSummary: true,
       needContent: false,
       needUrl: true,
@@ -165,6 +169,8 @@ export async function GET(request: NextRequest) {
       query,
       source,
     });
+
+    console.log(`[douyin-trending] Returning ${cachedTopics.length} topics for query: ${query}`);
 
     return NextResponse.json({
       success: true,
