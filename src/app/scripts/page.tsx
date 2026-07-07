@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   FileText,
   Sparkles,
@@ -22,6 +22,10 @@ import {
   BookOpen,
   ShoppingBag,
   Camera,
+  Plus,
+  Trash2,
+  Settings2,
+  Palette,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -50,6 +54,7 @@ interface AgentPreset {
   style: string;
   prompt: string;
   color: string;
+  isCustom?: boolean;
 }
 
 const AGENT_PRESETS: AgentPreset[] = [
@@ -128,6 +133,133 @@ export default function ScriptsPage() {
   const [scrapeResult, setScrapeResult] = useState('');
   const [activeTab, setActiveTab] = useState<'create' | 'scrape'>('create');
   const editorRef = useRef<HTMLTextAreaElement>(null);
+
+  // 自定义 Agent 状态
+  const [customAgents, setCustomAgents] = useState<AgentPreset[]>([]);
+  const [showAgentForm, setShowAgentForm] = useState(false);
+  const [editingAgentId, setEditingAgentId] = useState<string | null>(null);
+  const [agentForm, setAgentForm] = useState({
+    name: '',
+    description: '',
+    style: '',
+    prompt: '',
+  });
+
+  // 从 localStorage 加载自定义 Agent
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('custom-agents');
+      if (saved) {
+        const parsed = JSON.parse(saved) as Array<{
+          id: string;
+          name: string;
+          description: string;
+          style: string;
+          prompt: string;
+          color: string;
+        }>;
+        setCustomAgents(
+          parsed.map((a) => ({
+            ...a,
+            icon: Palette,
+            isCustom: true,
+          }))
+        );
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }, []);
+
+  // 保存自定义 Agent 到 localStorage
+  const saveCustomAgents = useCallback((agents: AgentPreset[]) => {
+    const serializable = agents.map(({ id, name, description, style, prompt, color }) => ({
+      id, name, description, style, prompt, color,
+    }));
+    localStorage.setItem('custom-agents', JSON.stringify(serializable));
+  }, []);
+
+  // 自定义 Agent 颜色池
+  const CUSTOM_COLORS = [
+    'text-rose-600 bg-rose-50 border-rose-200',
+    'text-teal-600 bg-teal-50 border-teal-200',
+    'text-indigo-600 bg-indigo-50 border-indigo-200',
+    'text-orange-600 bg-orange-50 border-orange-200',
+    'text-cyan-600 bg-cyan-50 border-cyan-200',
+    'text-fuchsia-600 bg-fuchsia-50 border-fuchsia-200',
+    'text-lime-600 bg-lime-50 border-lime-200',
+    'text-sky-600 bg-sky-50 border-sky-200',
+  ];
+
+  const getNextColor = useCallback(() => {
+    const usedColors = customAgents.map((a) => a.color);
+    const available = CUSTOM_COLORS.filter((c) => !usedColors.includes(c));
+    return available.length > 0 ? available[0] : CUSTOM_COLORS[customAgents.length % CUSTOM_COLORS.length];
+  }, [customAgents]);
+
+  const openCreateForm = useCallback(() => {
+    setEditingAgentId(null);
+    setAgentForm({ name: '', description: '', style: '', prompt: '' });
+    setShowAgentForm(true);
+  }, []);
+
+  const openEditForm = useCallback((agent: AgentPreset) => {
+    setEditingAgentId(agent.id);
+    setAgentForm({
+      name: agent.name,
+      description: agent.description,
+      style: agent.style,
+      prompt: agent.prompt,
+    });
+    setShowAgentForm(true);
+  }, []);
+
+  const handleSaveAgent = useCallback(() => {
+    if (!agentForm.name.trim() || !agentForm.prompt.trim()) return;
+
+    if (editingAgentId) {
+      const updated = customAgents.map((a) =>
+        a.id === editingAgentId
+          ? { ...a, name: agentForm.name, description: agentForm.description, style: agentForm.style, prompt: agentForm.prompt }
+          : a
+      );
+      setCustomAgents(updated);
+      saveCustomAgents(updated);
+      if (selectedPreset.id === editingAgentId) {
+        const updatedAgent = updated.find((a) => a.id === editingAgentId);
+        if (updatedAgent) setSelectedPreset(updatedAgent);
+      }
+    } else {
+      const newAgent: AgentPreset = {
+        id: `custom-${Date.now()}`,
+        name: agentForm.name,
+        icon: Palette,
+        description: agentForm.description || '自定义 Agent 风格',
+        style: agentForm.style || '自定义风格',
+        prompt: agentForm.prompt,
+        color: getNextColor(),
+        isCustom: true,
+      };
+      const updated = [...customAgents, newAgent];
+      setCustomAgents(updated);
+      saveCustomAgents(updated);
+    }
+    setShowAgentForm(false);
+    setEditingAgentId(null);
+    setAgentForm({ name: '', description: '', style: '', prompt: '' });
+  }, [agentForm, editingAgentId, customAgents, saveCustomAgents, getNextColor, selectedPreset]);
+
+  const handleDeleteAgent = useCallback((agentId: string) => {
+    const updated = customAgents.filter((a) => a.id !== agentId);
+    setCustomAgents(updated);
+    saveCustomAgents(updated);
+    if (selectedPreset.id === agentId) {
+      setSelectedPreset(AGENT_PRESETS[0]);
+    }
+  }, [customAgents, saveCustomAgents, selectedPreset]);
+
+  // 合并预设 + 自定义
+  const allAgents = [...AGENT_PRESETS, ...customAgents];
 
   // 生成脚本
   const handleGenerateScript = useCallback(async () => {
@@ -395,25 +527,59 @@ ${videoInfo.map((v: { title: string; summary?: string }, i: number) =>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-5 gap-3">
-            {AGENT_PRESETS.map((preset) => {
+            {allAgents.map((preset) => {
               const Icon = preset.icon;
               const isSelected = selectedPreset.id === preset.id;
               return (
-                <button
-                  key={preset.id}
-                  onClick={() => setSelectedPreset(preset)}
-                  className={`flex flex-col items-center gap-2 rounded-xl border p-4 transition-all ${
-                    isSelected
-                      ? `${preset.color} border-current ring-2 ring-offset-1`
-                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
-                  }`}
-                >
-                  <Icon className="h-5 w-5" />
-                  <span className="text-xs font-medium">{preset.name}</span>
-                  <span className="text-[10px] text-slate-400 line-clamp-1">{preset.description}</span>
-                </button>
+                <div key={preset.id} className="relative group">
+                  <button
+                    onClick={() => setSelectedPreset(preset)}
+                    className={`flex w-full flex-col items-center gap-2 rounded-xl border p-4 transition-all ${
+                      isSelected
+                        ? `${preset.color} border-current ring-2 ring-offset-1`
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Icon className="h-5 w-5" />
+                    <span className="text-xs font-medium">{preset.name}</span>
+                    <span className="text-[10px] text-slate-400 line-clamp-1">{preset.description}</span>
+                    {preset.isCustom && (
+                      <Badge variant="outline" className="mt-0.5 text-[9px] px-1.5 py-0 border-slate-300 text-slate-400">
+                        自定义
+                      </Badge>
+                    )}
+                  </button>
+                  {/* 自定义 Agent 操作按钮 */}
+                  {preset.isCustom && (
+                    <div className="absolute -top-1 -right-1 hidden group-hover:flex gap-0.5">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); openEditForm(preset); }}
+                        className="rounded-full bg-white p-1 shadow-md border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-300 transition-colors"
+                        title="编辑"
+                      >
+                        <Settings2 className="h-3 w-3" />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteAgent(preset.id); }}
+                        className="rounded-full bg-white p-1 shadow-md border border-slate-200 text-slate-500 hover:text-red-600 hover:border-red-300 transition-colors"
+                        title="删除"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )}
+                </div>
               );
             })}
+            {/* 创建自定义 Agent 按钮 */}
+            <button
+              onClick={openCreateForm}
+              className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 p-4 text-slate-400 transition-all hover:border-violet-400 hover:text-violet-500 hover:bg-violet-50/50"
+            >
+              <Plus className="h-5 w-5" />
+              <span className="text-xs font-medium">自定义 Agent</span>
+              <span className="text-[10px] text-slate-400">创建你的专属风格</span>
+            </button>
           </div>
         </CardContent>
       </Card>
@@ -749,6 +915,115 @@ ${videoInfo.map((v: { title: string; summary?: string }, i: number) =>
           )}
         </div>
       </div>
+
+      {/* 自定义 Agent 创建/编辑弹窗 */}
+      {showAgentForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 mx-4">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100">
+                  <Palette className="h-4 w-4 text-violet-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-slate-900">
+                  {editingAgentId ? '编辑自定义 Agent' : '创建自定义 Agent'}
+                </h3>
+              </div>
+              <button
+                onClick={() => { setShowAgentForm(false); setEditingAgentId(null); }}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Agent 名称 */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Agent 名称 <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  value={agentForm.name}
+                  onChange={(e) => setAgentForm((prev) => ({ ...prev, name: e.target.value }))}
+                  placeholder="例如：幽默段子手、知识科普达人、情感共鸣型"
+                  maxLength={20}
+                />
+                <p className="mt-1 text-xs text-slate-400">{agentForm.name.length}/20</p>
+              </div>
+
+              {/* 风格描述 */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  风格描述
+                </label>
+                <Input
+                  value={agentForm.description}
+                  onChange={(e) => setAgentForm((prev) => ({ ...prev, description: e.target.value }))}
+                  placeholder="简短描述这个 Agent 的特点，例如：幽默风趣，善用比喻和段子"
+                  maxLength={50}
+                />
+              </div>
+
+              {/* 风格关键词 */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  风格关键词
+                </label>
+                <Input
+                  value={agentForm.style}
+                  onChange={(e) => setAgentForm((prev) => ({ ...prev, style: e.target.value }))}
+                  placeholder="例如：幽默、接地气、有梗、节奏感强"
+                  maxLength={100}
+                />
+                <p className="mt-1 text-xs text-slate-400">用逗号分隔关键词，会影响 AI 的创作风格</p>
+              </div>
+
+              {/* System Prompt */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  System Prompt <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={agentForm.prompt}
+                  onChange={(e) => setAgentForm((prev) => ({ ...prev, prompt: e.target.value }))}
+                  placeholder="定义这个 Agent 的角色和创作规则，例如：&#10;&#10;你是一个幽默风趣的短视频脚本创作者。你擅长用段子和比喻来解释复杂概念。&#10;&#10;创作要求：&#10;1. 开头必须有一个出人意料的反转或笑点&#10;2. 中间用 2-3 个生动的类比来阐述核心观点&#10;3. 结尾要有一个让人会心一笑的金句&#10;4. 整体语气轻松幽默，但不低俗"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 resize-none"
+                  rows={8}
+                  maxLength={2000}
+                />
+                <p className="mt-1 text-xs text-slate-400">{agentForm.prompt.length}/2000 - 越详细的 Prompt，AI 创作越精准</p>
+              </div>
+
+              {/* Prompt 模板提示 */}
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-3">
+                <p className="text-xs text-amber-700 font-medium mb-1">Prompt 编写建议</p>
+                <p className="text-xs text-amber-600">
+                  好的 Prompt 应包含：角色定位（你是谁）+ 风格要求（怎么写）+ 结构规范（开头/中间/结尾的要求）+ 禁忌事项（不要做什么）
+                </p>
+              </div>
+            </div>
+
+            {/* 操作按钮 */}
+            <div className="flex justify-end gap-3 mt-6">
+              <Button
+                variant="outline"
+                onClick={() => { setShowAgentForm(false); setEditingAgentId(null); }}
+              >
+                取消
+              </Button>
+              <Button
+                onClick={handleSaveAgent}
+                disabled={!agentForm.name.trim() || !agentForm.prompt.trim()}
+                className="bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-50"
+              >
+                <Save className="h-4 w-4 mr-1.5" />
+                {editingAgentId ? '保存修改' : '创建 Agent'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
