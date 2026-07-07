@@ -1,0 +1,46 @@
+{
+  "workflows": [
+    {
+      "id": "wf_1783405921786_e6h8hd",
+      "name": "测试工作流",
+      "description": "测试知识库连接",
+      "status": "draft",
+      "trigger": "manual",
+      "schedule": "",
+      "modules": [
+        {
+          "id": "mod_1783405921786_1mxa",
+          "type": "knowledge_save",
+          "name": "保存到知识库",
+          "description": "将内容保存到知识库",
+          "config": {},
+          "enabled": true
+        }
+      ],
+      "createdAt": "2026-07-07T06:32:01.786Z",
+      "updatedAt": "2026-07-07T06:32:24.719Z",
+      "runCount": 1,
+      "successCount": 1,
+      "lastRunAt": "2026-07-07T06:32:24.719Z"
+    }
+  ],
+  "logs": [
+    {
+      "id": "wf_1783405944587_p554ur",
+      "workflowId": "wf_1783405921786_e6h8hd",
+      "workflowName": "测试工作流",
+      "status": "success",
+      "startedAt": "2026-07-07T06:32:24.587Z",
+      "moduleResults": [
+        {
+          "moduleId": "mod_1783405921786_1mxa",
+          "moduleName": "保存到知识库",
+          "status": "success",
+          "output": "已成功存入知识库，文档ID: 7659667174964953098",
+          "duration": 132
+        }
+      ],
+      "finishedAt": "2026-07-07T06:32:24.719Z"
+    }
+  ]
+}
