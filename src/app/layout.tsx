@@ -5,8 +5,8 @@ import { Header } from '@/components/layout/header';
 
 export const metadata: Metadata = {
   title: {
-    default: '运营自动化中心',
-    template: '%s | 运营自动化中心',
+    default: 'ECCP - 企业文化内容平台',
+    template: '%s | ECCP 企业文化内容平台',
   },
   description:
     '基于 Coze 的自动化运营工作流管理平台，实现选题策划、脚本生成、知识库沉淀与数据汇总的全流程自动化管理。',

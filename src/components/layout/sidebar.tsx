@@ -52,10 +52,10 @@ export function Sidebar() {
         {!collapsed && (
           <div className="overflow-hidden">
             <h1 className="truncate text-sm font-semibold text-white">
-              运营自动化中心
+              ECCP
             </h1>
             <p className="truncate text-xs text-slate-400">
-              运营自动化中心
+              企业文化内容平台
             </p>
           </div>
         )}
