@@ -369,13 +369,19 @@ export default function ScriptsPage() {
       }
 
       const searchData = await searchResponse.json();
-      const videoInfo = searchData.data?.slice(0, 3) || [];
+      const videoInfo = searchData.data?.topics?.slice(0, 3) || [];
+
+      if (videoInfo.length === 0) {
+        setScrapeResult('未找到相关视频内容，请尝试更换关键词或链接');
+        setIsScraping(false);
+        return;
+      }
 
       // 分析视频内容并生成仿写脚本
       const analysisPrompt = `请分析以下视频内容的特点和成功要素，然后基于这些要素创作一个全新的脚本（不要抄袭，要原创）：
 
-${videoInfo.map((v: { title: string; summary?: string }, i: number) =>
-  `视频${i + 1}：${v.title}\n${v.summary || ''}`
+${videoInfo.map((v: { title: string; snippet?: string }, i: number) =>
+  `视频${i + 1}：${v.title}\n${v.snippet || ''}`
 ).join('\n\n')}
 
 请从以下角度分析：
