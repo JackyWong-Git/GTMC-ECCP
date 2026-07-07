@@ -169,12 +169,11 @@ export function getLLMConfig(): {
 }
 
 /**
- * 创建 coze-coding-dev-sdk 的 Config 实例
+ * 设置 LLM 环境变量
  * 自动从平台配置中读取 API Key 和 Base URL
- * 通过设置环境变量传递给 SDK（Config 属性为 readonly）
+ * 调用方需要自行 import Config from 'coze-coding-dev-sdk'
  */
-export function createLLMConfig(): import("coze-coding-dev-sdk").Config {
-  const { Config } = require("coze-coding-dev-sdk") as typeof import("coze-coding-dev-sdk");
+export function setupLLMEnv(): void {
   const llmConfig = getLLMConfig();
   // 设置环境变量供 SDK 读取（仅在未设置时覆盖）
   if (llmConfig.apiKey && !process.env.OPENAI_API_KEY) {
@@ -183,5 +182,4 @@ export function createLLMConfig(): import("coze-coding-dev-sdk").Config {
   if (llmConfig.baseUrl && !process.env.OPENAI_BASE_URL) {
     process.env.OPENAI_BASE_URL = llmConfig.baseUrl;
   }
-  return new Config();
 }

@@ -14,6 +14,7 @@ import {
   ChevronRight,
   Settings,
   LayoutTemplate,
+  PenSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
@@ -22,6 +23,7 @@ const navItems = [
   { href: '/', label: '运营总览', icon: LayoutDashboard },
   { href: '/topics', label: '选题池', icon: Lightbulb },
   { href: '/scripts', label: '脚本工坊', icon: FileText },
+  { href: '/articles', label: '公众号文章', icon: PenSquare },
   { href: '/analytics', label: '数据看板', icon: BarChart3 },
   { href: '/workflows', label: '工作流', icon: Workflow },
   { href: '/workflows/templates', label: '模板市场', icon: LayoutTemplate },

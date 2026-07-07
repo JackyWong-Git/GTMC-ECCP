@@ -28,6 +28,7 @@
 │   │   ├── globals.css           # 全局样式
 │   │   ├── topics/page.tsx       # 选题池（多维表视图）
 │   │   ├── scripts/page.tsx      # 脚本工坊（AI脚本生成）
+│   │   ├── articles/page.tsx     # 公众号文章（AI长文写作）
 │   │   ├── analytics/page.tsx    # 数据看板（播放/点赞/评论）
 │   │   ├── workflows/page.tsx    # 工作流管理（卡片式列表+执行监控）
 │   │   ├── workflows/create/page.tsx # 工作流编辑器（可视化节点画布+AI助手）
@@ -37,6 +38,7 @@
 │   │   └── api/                  # API 路由
 │   │       ├── analyze-topic/route.ts   # 选题热度分析（doubao-seed-2-0-lite）
 │   │       ├── generate-script/route.ts # 脚本大纲生成（qwen-3-5-plus，流式SSE）
+│   │       ├── generate-article/route.ts # 公众号文章生成（qwen-3-5-plus，流式SSE）
 │   │       ├── data-summary/route.ts    # 数据周报生成（doubao-seed-2-0-mini）
 │   │       ├── douyin-trending/route.ts # 热榜抓取（Search + LLM，支持自定义搜索词+本地缓存）
 │   │       ├── topic-analysis/route.ts  # 选题深度分析（内容摘要+受众画像+价值评分）
