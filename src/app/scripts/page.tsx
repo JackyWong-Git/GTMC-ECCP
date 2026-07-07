@@ -377,20 +377,30 @@ export default function ScriptsPage() {
         return;
       }
 
-      // 分析视频内容并生成仿写脚本
-      const analysisPrompt = `请分析以下视频内容的特点和成功要素，然后基于这些要素创作一个全新的脚本（不要抄袭，要原创）：
+      // 分析视频内容并结合 Agent 风格生成仿写脚本
+      const agentStyleGuide = selectedPreset.prompt;
+      const agentStyleName = selectedPreset.name;
 
+      const analysisPrompt = `你是一位专业的视频脚本创作师。请先分析以下视频内容的成功要素，然后严格按照指定的 Agent 风格创作一个全新的原创脚本。
+
+## 参考视频内容
 ${videoInfo.map((v: { title: string; snippet?: string }, i: number) =>
   `视频${i + 1}：${v.title}\n${v.snippet || ''}`
 ).join('\n\n')}
 
-请从以下角度分析：
+## 分析要求
 1. 内容结构（开头钩子、中间节奏、结尾引导）
 2. 表达风格（语气、节奏、情感）
 3. 成功要素（为什么能火）
-4. 仿写建议（如何创作类似风格但原创的内容）
 
-然后基于分析，为选题"${topicTitle || '请指定选题'}"创作一个完整的脚本。`;
+## Agent 风格要求
+当前选用的 Agent 风格是「${agentStyleName}」，你必须严格遵循以下风格指南来创作脚本：
+
+${agentStyleGuide}
+
+## 创作任务
+基于以上视频分析和「${agentStyleName}」的 Agent 风格，为选题"${topicTitle || '请指定选题'}"创作一个完整的脚本。
+脚本必须体现「${agentStyleName}」的风格特征，同时借鉴参考视频的成功要素，但内容必须是原创的。`;
 
       const response = await fetch('/api/generate-script', {
         method: 'POST',
