@@ -12,11 +12,12 @@ import { MODEL_CONFIG, SYSTEM_PROMPTS } from '@/lib/llm-config';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { topicTitle, platform, style, duration } = body as {
+    const { topicTitle, platform, style, duration, systemPrompt } = body as {
       topicTitle: string;
       platform: string;
       style?: string;
       duration?: string;
+      systemPrompt?: string;
     };
 
     if (!topicTitle || !platform) {
@@ -40,7 +41,7 @@ ${duration ? `视频时长：${duration}` : '视频时长：3-5分钟'}
 请生成一份完整的、可直接用于拍摄的视频脚本大纲。`;
 
     const messages = [
-      { role: 'system' as const, content: SYSTEM_PROMPTS.SCRIPT_GENERATION },
+      { role: 'system' as const, content: systemPrompt || SYSTEM_PROMPTS.SCRIPT_GENERATION },
       { role: 'user' as const, content: userContent },
     ];
 
