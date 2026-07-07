@@ -128,6 +128,7 @@ export default function ScriptsPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [streamContent, setStreamContent] = useState('');
   const [streamModel, setStreamModel] = useState('');
+  const [isIncomplete, setIsIncomplete] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
@@ -339,6 +340,12 @@ export default function ScriptsPage() {
               }
               if (data.done) {
                 setStreamModel(data.model || '');
+                // 检测内容是否不完整（没有拍摄建议部分）
+                const hasShootingTips = fullContent.includes('拍摄建议') || fullContent.includes('拍摄提示');
+                const hasEnding = fullContent.includes('结尾') || fullContent.includes('引导');
+                const isIncompleteContent = !hasShootingTips || !hasEnding;
+                setIsIncomplete(isIncompleteContent);
+                
                 // 保存到脚本列表
                 const newScript: Script = {
                   id: `script_${Date.now()}`,
@@ -369,6 +376,96 @@ export default function ScriptsPage() {
       setIsGenerating(false);
     }
   }, [topicTitle, platform, selectedPreset]);
+
+  // 继续生成（当内容不完整时）
+  const handleContinueGenerate = useCallback(async () => {
+    if (!streamContent.trim()) return;
+
+    setIsGenerating(true);
+    setIsIncomplete(false);
+
+    const continuePrompt = `请继续完成上面的脚本，从当前中断的地方继续输出。确保包含完整的"拍摄建议"和"结尾引导"部分。
+
+当前已生成的内容：
+${streamContent}
+
+请从中断处继续：`;
+
+    try {
+      const response = await fetch('/api/generate-script', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topicTitle: `继续生成：${topicTitle}`,
+          platform,
+          style: selectedPreset.style,
+          duration: '3-5分钟',
+          systemPrompt: continuePrompt,
+        }),
+      });
+
+      if (!response.ok) {
+        setStreamContent(prev => prev + '\n\n继续生成失败');
+        setIsGenerating(false);
+        return;
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        setIsGenerating(false);
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let fullContent = streamContent;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const text = decoder.decode(value, { stream: true });
+        const lines = text.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.content) {
+                fullContent += data.content;
+                setStreamContent(fullContent);
+              }
+              if (data.done) {
+                // 再次检测是否完整
+                const hasShootingTips = fullContent.includes('拍摄建议') || fullContent.includes('拍摄提示');
+                const hasEnding = fullContent.includes('结尾') || fullContent.includes('引导');
+                setIsIncomplete(!hasShootingTips || !hasEnding);
+                
+                // 更新脚本列表
+                const updatedScript: Script = {
+                  id: `script_${Date.now()}`,
+                  topicTitle,
+                  platform,
+                  status: 'completed',
+                  generatedAt: new Date().toLocaleString('zh-CN'),
+                  wordCount: fullContent.length,
+                  content: fullContent,
+                  agentPreset: selectedPreset.name,
+                };
+                setScripts(prev => [updatedScript, ...prev.slice(1)]);
+                setSelectedScript(updatedScript);
+              }
+            } catch {
+              // skip
+            }
+          }
+        }
+      }
+    } catch (err) {
+      setStreamContent(prev => prev + `\n\n继续生成失败：${err instanceof Error ? err.message : '网络错误'}`);
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [streamContent, topicTitle, platform, selectedPreset]);
 
   // 扒视频 - 只提取文案
   const handleScrapeVideo = useCallback(async () => {
@@ -890,12 +987,30 @@ ${agentStyleGuide}
                       {isGenerating ? '正在生成...' : '生成完成'}
                     </span>
                   </div>
-                  {streamModel && (
-                    <Badge variant="secondary" className="rounded-full bg-violet-50 text-[10px] text-violet-600">
-                      {streamModel}
-                    </Badge>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {streamModel && (
+                      <Badge variant="secondary" className="rounded-full bg-violet-50 text-[10px] text-violet-600">
+                        {streamModel}
+                      </Badge>
+                    )}
+                    {isIncomplete && !isGenerating && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 gap-1 border-amber-300 text-xs text-amber-600 hover:bg-amber-50"
+                        onClick={handleContinueGenerate}
+                      >
+                        <Play className="h-3 w-3" />
+                        继续生成
+                      </Button>
+                    )}
+                  </div>
                 </div>
+                {isIncomplete && !isGenerating && (
+                  <div className="mb-2 rounded bg-amber-50 px-2 py-1 text-xs text-amber-600">
+                    内容可能不完整，点击「继续生成」补全剩余部分
+                  </div>
+                )}
                 <div className="max-h-[300px] overflow-y-auto">
                   <pre className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
                     {streamContent}
