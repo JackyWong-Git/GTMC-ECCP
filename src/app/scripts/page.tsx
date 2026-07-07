@@ -347,7 +347,7 @@ export default function ScriptsPage() {
     }
   }, [topicTitle, platform, selectedPreset]);
 
-  // 扒视频仿写
+  // 扒视频 - 只提取文案
   const handleScrapeVideo = useCallback(async () => {
     if (!videoUrl.trim()) return;
 
@@ -363,7 +363,7 @@ export default function ScriptsPage() {
       });
 
       if (!searchResponse.ok) {
-        setScrapeResult('视频信息获取失败，请检查链接是否有效');
+        setScrapeResult('视频信息获取失败，请检查链接或关键词是否有效');
         setIsScraping(false);
         return;
       }
@@ -377,45 +377,36 @@ export default function ScriptsPage() {
         return;
       }
 
-      // 分析视频内容并结合 Agent 风格生成仿写脚本
-      const agentStyleGuide = selectedPreset.prompt;
-      const agentStyleName = selectedPreset.name;
+      // 提取视频文案
+      const extractPrompt = `你是一位专业的视频文案提取师。请从以下视频信息中提取核心文案内容。
 
-      const analysisPrompt = `你是一位专业的视频脚本创作师。请先分析以下视频内容的成功要素，然后严格按照指定的 Agent 风格创作一个全新的原创脚本。
-
-## 参考视频内容
+## 视频信息
 ${videoInfo.map((v: { title: string; snippet?: string }, i: number) =>
   `视频${i + 1}：${v.title}\n${v.snippet || ''}`
 ).join('\n\n')}
 
-## 分析要求
-1. 内容结构（开头钩子、中间节奏、结尾引导）
-2. 表达风格（语气、节奏、情感）
-3. 成功要素（为什么能火）
+## 提取要求
+1. 提取视频的核心文案/脚本内容
+2. 保留原始的表达方式和语气
+3. 如果有多条视频，分别列出每条的文案
+4. 用清晰的分隔区分不同视频的文案
 
-## Agent 风格要求
-当前选用的 Agent 风格是「${agentStyleName}」，你必须严格遵循以下风格指南来创作脚本：
-
-${agentStyleGuide}
-
-## 创作任务
-基于以上视频分析和「${agentStyleName}」的 Agent 风格，为选题"${topicTitle || '请指定选题'}"创作一个完整的脚本。
-脚本必须体现「${agentStyleName}」的风格特征，同时借鉴参考视频的成功要素，但内容必须是原创的。`;
+请直接输出提取的文案内容，不要添加分析或评论。`;
 
       const response = await fetch('/api/generate-script', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          topicTitle: topicTitle || '视频仿写',
-          platform,
-          style: selectedPreset.style,
-          duration: '3-5分钟',
-          systemPrompt: analysisPrompt,
+          topicTitle: '视频文案提取',
+          platform: 'douyin',
+          style: 'professional',
+          duration: '1-3分钟',
+          systemPrompt: extractPrompt,
         }),
       });
 
       if (!response.ok) {
-        setScrapeResult('脚本生成失败');
+        setScrapeResult('文案提取失败');
         setIsScraping(false);
         return;
       }
@@ -445,21 +436,6 @@ ${agentStyleGuide}
                 fullContent += data.content;
                 setScrapeResult(fullContent);
               }
-              if (data.done) {
-                const newScript: Script = {
-                  id: `script_${Date.now()}`,
-                  topicTitle: topicTitle || '视频仿写',
-                  platform,
-                  status: 'completed',
-                  generatedAt: new Date().toLocaleString('zh-CN'),
-                  wordCount: fullContent.length,
-                  content: fullContent,
-                  agentPreset: `${selectedPreset.name}（仿写）`,
-                  sourceUrl: videoUrl,
-                };
-                setScripts(prev => [newScript, ...prev]);
-                setSelectedScript(newScript);
-              }
             } catch {
               // skip
             }
@@ -471,7 +447,106 @@ ${agentStyleGuide}
     } finally {
       setIsScraping(false);
     }
-  }, [videoUrl, topicTitle, platform, selectedPreset]);
+  }, [videoUrl]);
+
+  // 根据扒取的文案 + Agent 风格再创作
+  const handleRewriteFromScrape = useCallback(async () => {
+    if (!scrapeResult.trim()) return;
+
+    setIsGenerating(true);
+    setStreamContent('');
+
+    const agentStyleGuide = selectedPreset.prompt;
+    const agentStyleName = selectedPreset.name;
+
+    const rewritePrompt = `你是一位专业的视频脚本创作师。请基于以下参考文案，严格按照「${agentStyleName}」的 Agent 风格创作一个全新的原创脚本。
+
+## 参考文案（从视频中提取）
+${scrapeResult}
+
+## Agent 风格要求
+当前选用的 Agent 风格是「${agentStyleName}」，你必须严格遵循以下风格指南：
+
+${agentStyleGuide}
+
+## 创作任务
+1. 借鉴参考文案的成功要素（结构、节奏、表达方式）
+2. 严格按照「${agentStyleName}」的风格特征进行创作
+3. 内容必须是原创的，不能照搬参考文案
+4. 为选题"${topicTitle || '请指定选题'}"创作完整脚本`;
+
+    try {
+      const response = await fetch('/api/generate-script', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topicTitle: topicTitle || '仿写脚本',
+          platform,
+          style: selectedPreset.style,
+          duration: '3-5分钟',
+          systemPrompt: rewritePrompt,
+        }),
+      });
+
+      if (!response.ok) {
+        setStreamContent('脚本生成失败');
+        setIsGenerating(false);
+        return;
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        setStreamContent('无法读取流式响应');
+        setIsGenerating(false);
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let fullContent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const text = decoder.decode(value, { stream: true });
+        const lines = text.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.content) {
+                fullContent += data.content;
+                setStreamContent(fullContent);
+              }
+              if (data.done) {
+                const newScript: Script = {
+                  id: `script_${Date.now()}`,
+                  topicTitle: topicTitle || '仿写脚本',
+                  platform,
+                  status: 'completed',
+                  generatedAt: new Date().toLocaleString('zh-CN'),
+                  wordCount: fullContent.length,
+                  content: fullContent,
+                  agentPreset: `${agentStyleName}（仿写）`,
+                  sourceUrl: videoUrl,
+                };
+                setScripts(prev => [newScript, ...prev]);
+                setSelectedScript(newScript);
+                setActiveTab('create');
+              }
+            } catch {
+              // skip
+            }
+          }
+        }
+      }
+    } catch (err) {
+      setStreamContent(`请求失败：${err instanceof Error ? err.message : '网络错误'}`);
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [scrapeResult, topicTitle, platform, selectedPreset, videoUrl]);
 
   // 复制脚本
   const handleCopy = useCallback((content: string) => {
@@ -622,7 +697,7 @@ ${agentStyleGuide}
           }`}
         >
           <Video className="h-4 w-4" />
-          扒视频仿写
+          扒文案
         </button>
       </div>
 
@@ -718,11 +793,11 @@ ${agentStyleGuide}
             <div className="flex items-center gap-2">
               <Film className="h-4 w-4 text-blue-500" />
               <CardTitle className="text-sm font-semibold text-slate-800">
-                扒视频仿写
+                扒视频文案
               </CardTitle>
             </div>
             <CardDescription className="text-xs text-slate-400">
-              输入爆款视频链接或关键词，AI 分析成功要素后为你创作原创脚本
+              输入爆款视频链接或关键词，AI 提取文案后可根据 Agent 风格再创作
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -739,12 +814,6 @@ ${agentStyleGuide}
                   }}
                 />
               </div>
-              <Input
-                placeholder="仿写选题（可选）"
-                value={topicTitle}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTopicTitle(e.target.value)}
-                className="h-9 w-[200px] rounded-lg border-slate-200 text-sm"
-              />
               <Button
                 className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
                 onClick={handleScrapeVideo}
@@ -755,26 +824,72 @@ ${agentStyleGuide}
                 ) : (
                   <Video className="h-4 w-4" />
                 )}
-                {isScraping ? '分析中...' : '扒视频仿写'}
+                {isScraping ? '提取中...' : '扒文案'}
               </Button>
             </div>
 
-            {/* Scrape Result */}
+            {/* Scrape Result - 提取的文案 */}
             {(scrapeResult || isScraping) && (
               <div className="mt-4 rounded-lg border border-blue-200 bg-white p-4">
-                <div className="mb-2 flex items-center gap-2">
-                  {isScraping && (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />
+                <div className="mb-2 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {isScraping && (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />
+                    )}
+                    <span className="text-xs font-medium text-slate-600">
+                      {isScraping ? '正在提取文案...' : '文案提取完成'}
+                    </span>
+                  </div>
+                  {!isScraping && scrapeResult && (
+                    <Button
+                      size="sm"
+                      className="gap-1.5 bg-violet-600 text-xs text-white hover:bg-violet-700"
+                      onClick={handleRewriteFromScrape}
+                      disabled={isGenerating}
+                    >
+                      {isGenerating ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-3.5 w-3.5" />
+                      )}
+                      {isGenerating ? '创作中...' : `用「${selectedPreset.name}」再创作`}
+                    </Button>
                   )}
-                  <span className="text-xs font-medium text-slate-600">
-                    {isScraping ? '正在分析视频并生成脚本...' : '仿写完成'}
-                  </span>
                 </div>
                 <div className="max-h-[300px] overflow-y-auto">
                   <pre className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
                     {scrapeResult}
                     {isScraping && (
                       <span className="inline-block h-4 w-0.5 animate-pulse bg-blue-500" />
+                    )}
+                  </pre>
+                </div>
+              </div>
+            )}
+
+            {/* 再创作生成结果 */}
+            {(streamContent || isGenerating) && activeTab === 'scrape' && (
+              <div className="mt-4 rounded-lg border border-violet-200 bg-white p-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {isGenerating && (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-500" />
+                    )}
+                    <span className="text-xs font-medium text-slate-600">
+                      {isGenerating ? '正在创作...' : '创作完成'}
+                    </span>
+                  </div>
+                  {streamModel && (
+                    <Badge variant="secondary" className="rounded-full bg-violet-50 text-[10px] text-violet-600">
+                      {streamModel}
+                    </Badge>
+                  )}
+                </div>
+                <div className="max-h-[300px] overflow-y-auto">
+                  <pre className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+                    {streamContent}
+                    {isGenerating && (
+                      <span className="inline-block h-4 w-0.5 animate-pulse bg-violet-500" />
                     )}
                   </pre>
                 </div>
