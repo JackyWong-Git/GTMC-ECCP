@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { LLMClient, SearchClient, Config, HeaderUtils } from "coze-coding-dev-sdk";
+import { LLMClient, SearchClient, KnowledgeClient, Config, HeaderUtils, DataSourceType } from "coze-coding-dev-sdk";
 import {
   getWorkflow,
   saveWorkflow,
@@ -10,8 +10,7 @@ import {
 } from "@/lib/workflow-store";
 import { generateId } from "@/lib/workflow-store";
 import { getModelById } from "@/lib/llm-config";
-import { getSession } from "@/lib/feishu-client";
-import { getPlatformConfig } from "@/lib/platform-config";
+import { setupLLMEnv } from "@/lib/platform-config";
 
 /** POST — 执行工作流 */
 export async function POST(request: NextRequest) {
@@ -32,6 +31,9 @@ export async function POST(request: NextRequest) {
     if (enabledModules.length === 0) {
       return NextResponse.json({ success: false, error: "工作流没有启用的模块" }, { status: 400 });
     }
+
+    // 确保 LLM 环境变量已设置
+    setupLLMEnv();
 
     // 创建执行日志
     const runLog: WorkflowRunLog = {
@@ -59,7 +61,6 @@ export async function POST(request: NextRequest) {
           output: result.slice(0, 2000),
           duration,
         });
-        // 将输出传递给下一个模块
         context = result;
       } catch (err) {
         const duration = Date.now() - startTime;
@@ -71,7 +72,6 @@ export async function POST(request: NextRequest) {
           error: errorMsg,
           duration,
         });
-        // 遇到错误停止执行
         runLog.status = "error";
         runLog.error = `模块「${mod.name}」执行失败：${errorMsg}`;
         break;
@@ -84,10 +84,8 @@ export async function POST(request: NextRequest) {
     runLog.finishedAt = new Date().toISOString();
     runLog.moduleResults = moduleResults;
 
-    // 保存日志
     saveWorkflowLog(runLog);
 
-    // 更新工作流运行统计
     workflow.runCount += 1;
     if (runLog.status === "success") {
       workflow.successCount += 1;
@@ -152,107 +150,56 @@ async function executeModule(mod: WorkflowModule, input: string): Promise<string
     }
 
     case "data_fetch": {
-      // 模拟数据抓取 — 实际应调用对应平台 API
       const platform = mod.config?.platform as string || "douyin";
       return `已从 ${platform} 平台抓取数据，输入内容：\n${input}`;
     }
 
-    case "feishu_write": {
-      // 飞书多维表写入 — 实际调用飞书 API
-      const session = getSession();
-      if (!session) {
-        throw new Error("未登录飞书，请先在设置页面连接飞书账号");
-      }
+    case "knowledge_save": {
+      // 知识库写入 — 将工作流产出存入云文档知识库
+      const config = new Config();
+      const knowledgeClient = new KnowledgeClient(config);
 
-      const config = getPlatformConfig();
-      const ledger = config.ledger;
-      const appToken = (mod.config?.appToken as string) || ledger?.appToken;
-      const tableId = (mod.config?.tableId as string) || ledger?.tableId;
-
-      if (!appToken || !tableId) {
-        throw new Error("未配置多维表，请先在设置页面配置台账 App Token 和 Table ID");
-      }
-
-      // 解析输入数据，尝试提取结构化字段
       let title = (mod.config?.title as string) || "工作流产出";
       let contentType = (mod.config?.contentType as string) || "脚本";
-      let summary = input.slice(0, 500);
 
-      // 尝试从输入中解析 JSON 数据
       try {
         const parsed = JSON.parse(input);
         if (parsed.title) title = parsed.title;
         if (parsed.contentType) contentType = parsed.contentType;
-        if (parsed.summary) summary = parsed.summary;
-        if (parsed.content) summary = parsed.content.slice(0, 500);
       } catch {
         // 非 JSON 格式，使用原始输入
       }
 
-      const record = {
-        fields: {
-          "内容类型": contentType,
-          "标题": title,
-          "内容摘要": summary,
-          "创建时间": Date.now(),
-          "状态": "已生成",
-        },
-      };
-
-      const FEISHU_API_BASE = "https://open.feishu.cn/open-apis";
-      const res = await fetch(
-        `${FEISHU_API_BASE}/bitable/v1/apps/${appToken}/tables/${tableId}/records/batch_create`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.userAccessToken}`,
-          },
-          body: JSON.stringify({ records: [record] }),
-        }
+      const docContent = `[${contentType}] ${title}\n\n${input}`;
+      const response = await knowledgeClient.addDocuments(
+        [{ source: DataSourceType.TEXT, raw_data: docContent }],
+        "coze_doc_knowledge"
       );
 
-      const data = await res.json();
-      if (data.code !== 0) {
-        throw new Error(`飞书写入失败: ${data.msg || "未知错误"}`);
+      if (response.code === 0) {
+        const docIds = response.doc_ids?.join(", ") || "unknown";
+        return `已成功存入知识库，文档ID: ${docIds}`;
       }
-
-      const recordIds = data.data?.records?.map(
-        (r: { record_id: string }) => r.record_id
-      ) || [];
-
-      return `成功写入 ${recordIds.length} 条记录到多维表台账，记录ID: ${recordIds.join(", ")}`;
+      throw new Error(`知识库写入失败: ${response.msg || "未知错误"}`);
     }
 
-    case "feishu_notify": {
-      // 飞书通知 — 通过飞书机器人发送消息
-      const session = getSession();
-      if (!session) {
-        throw new Error("未登录飞书，请先在设置页面连接飞书账号");
+    case "knowledge_search": {
+      // 知识库搜索 — 从知识库中检索相关内容
+      const config = new Config();
+      const knowledgeClient = new KnowledgeClient(config);
+      const query = input.slice(0, 200) || (mod.config?.query as string) || "运营知识";
+      const topK = (mod.config?.topK as number) || 5;
+
+      const response = await knowledgeClient.search(query, undefined, topK);
+
+      if (response.code === 0 && response.chunks && response.chunks.length > 0) {
+        return response.chunks
+          .map((chunk: { content: string; score: number }, i: number) =>
+            `[${i + 1}] (相关度: ${(chunk.score * 100).toFixed(1)}%)\n${chunk.content}`
+          )
+          .join("\n\n---\n\n");
       }
-
-      const webhookUrl = mod.config?.webhookUrl as string;
-      const notifyContent = input.slice(0, 2000);
-
-      if (webhookUrl) {
-        // 通过 Webhook 发送消息
-        const res = await fetch(webhookUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            msg_type: "text",
-            content: { text: notifyContent },
-          }),
-        });
-        const data = await res.json();
-        if (data.code !== 0 && data.StatusCode !== 0) {
-          throw new Error(`飞书通知发送失败: ${data.msg || "未知错误"}`);
-        }
-        return `飞书通知已发送到 Webhook`;
-      }
-
-      // 没有 Webhook 时，记录通知内容
-      return `飞书通知内容（未配置 Webhook）：${notifyContent.slice(0, 200)}`;
+      return "知识库中未找到相关内容";
     }
 
     case "condition": {

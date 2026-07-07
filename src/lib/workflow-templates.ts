@@ -32,7 +32,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
   {
     id: 'tpl_video_script',
     name: '视频脚本全流程生成器',
-    description: '从热点抓取到分镜脚本，一站式生成完整视频内容。自动分析热点话题，生成口播脚本、分镜表和补拍清单，最终写入飞书台账。',
+    description: '从热点抓取到分镜脚本，一站式生成完整视频内容。自动分析热点话题，生成口播脚本、分镜表和补拍清单，最终存入知识库。',
     category: 'content',
     icon: 'Video',
     tags: ['视频', '脚本', '热点', '分镜'],
@@ -119,9 +119,9 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
         enabled: true,
       },
       {
-        type: 'feishu_write',
-        name: '写入飞书台账',
-        description: '将生成的脚本存入飞书多维表',
+        type: 'knowledge_save',
+        name: '存入知识库',
+        description: '将生成的脚本存入云文档知识库',
         config: {
           contentType: '脚本',
           status: '待审核',
@@ -190,9 +190,9 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
         enabled: true,
       },
       {
-        type: 'feishu_write',
-        name: '存入台账',
-        description: '将周报存入飞书多维表',
+        type: 'knowledge_save',
+        name: '存入知识库',
+        description: '将周报存入云文档知识库',
         config: {
           contentType: '报告',
           status: '已完成',
@@ -200,11 +200,12 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
         enabled: true,
       },
       {
-        type: 'feishu_notify',
+        type: 'knowledge_save',
         name: '通知团队',
-        description: '发送周报到飞书群',
+        description: '将周报存入知识库供团队查阅',
         config: {
-          messageTemplate: '📊 运营周报已生成！\n\n核心数据：\n{summary}\n\n查看详情请前往台账。',
+          contentType: '通知',
+          messageTemplate: '运营周报已生成！\n\n核心数据：\n{summary}\n\n查看详情请前往知识库。',
         },
         enabled: true,
       },
@@ -282,9 +283,9 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
         enabled: true,
       },
       {
-        type: 'feishu_write',
+        type: 'knowledge_save',
         name: '存入选题库',
-        description: '将评估结果存入选题池',
+        description: '将评估结果存入知识库选题池',
         config: {
           contentType: '选题',
           status: '待决策',
@@ -394,9 +395,9 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
         enabled: true,
       },
       {
-        type: 'feishu_write',
+        type: 'knowledge_save',
         name: '存入故事库',
-        description: '将故事存入飞书台账',
+        description: '将故事存入云文档知识库',
         config: {
           contentType: '故事',
           status: '待审核',
@@ -514,9 +515,9 @@ K站特点：
         enabled: true,
       },
       {
-        type: 'feishu_write',
-        name: '批量写入台账',
-        description: '将各平台内容分别写入台账',
+        type: 'knowledge_save',
+        name: '批量存入知识库',
+        description: '将各平台内容分别存入知识库',
         config: {
           contentType: '多平台内容',
           status: '待发布',

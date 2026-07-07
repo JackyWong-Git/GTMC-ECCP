@@ -15,6 +15,7 @@ import {
   Settings,
   LayoutTemplate,
   PenSquare,
+  BookOpen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
@@ -25,10 +26,11 @@ const navItems = [
   { href: '/scripts', label: '脚本工坊', icon: FileText },
   { href: '/articles', label: '公众号文章', icon: PenSquare },
   { href: '/analytics', label: '数据看板', icon: BarChart3 },
+  { href: '/knowledge', label: '知识库', icon: BookOpen },
   { href: '/workflows', label: '工作流', icon: Workflow },
   { href: '/workflows/templates', label: '模板市场', icon: LayoutTemplate },
   { href: '/team', label: '团队协作', icon: Users },
-  { href: '/settings', label: '飞书集成', icon: Settings },
+  { href: '/settings', label: '系统设置', icon: Settings },
 ];
 
 export function Sidebar() {
@@ -53,7 +55,7 @@ export function Sidebar() {
               运营自动化中心
             </h1>
             <p className="truncate text-xs text-slate-400">
-              Coze × 飞书
+              运营自动化中心
             </p>
           </div>
         )}

@@ -15,7 +15,7 @@ export async function GET() {
 
   if (!status.connected) {
     return NextResponse.json(
-      { error: "未登录抖音，请先在「飞书集成」页面连接抖音账号" },
+      { error: "未登录抖音，请先在「系统设置」页面连接抖音账号" },
       { status: 401 }
     );
   }

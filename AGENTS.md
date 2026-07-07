@@ -10,7 +10,7 @@
 
 ## 项目概述
 
-基于 Coze 和飞书的自动化运营工作流管理平台，实现选题策划、脚本生成、数据汇总与团队协作的全流程自动化管理。
+基于 Coze 的自动化运营工作流管理平台，集成云文档知识库，实现选题策划、脚本生成、知识管理与团队协作的全流程自动化管理。
 
 ## 目录结构
 
@@ -33,8 +33,9 @@
 │   │   ├── workflows/page.tsx    # 工作流管理（卡片式列表+执行监控）
 │   │   ├── workflows/create/page.tsx # 工作流编辑器（可视化节点画布+AI助手）
 │   │   ├── workflows/templates/page.tsx # 模板市场（浏览+一键克隆）
-│   │   ├── team/page.tsx         # 团队协作（飞书Bot集成）
-│   │   ├── settings/page.tsx     # 飞书集成设置（凭证+台账+数据源）
+│   │   ├── team/page.tsx         # 团队协作（成员管理+任务分配）
+│   │   ├── knowledge/page.tsx    # 知识库（文档管理+语义搜索+AI引用）
+│   │   ├── settings/page.tsx     # 平台设置（抖音凭证+LLM配置+知识库配置）
 │   │   └── api/                  # API 路由
 │   │       ├── analyze-topic/route.ts   # 选题热度分析（doubao-seed-2-0-lite）
 │   │       ├── generate-script/route.ts # 脚本大纲生成（qwen-3-5-plus，流式SSE）
@@ -45,23 +46,13 @@
 │   │       ├── topic-keywords/route.ts  # 预设关键词库（汽车行业/微博热榜/行业报告/危机公关）
 │   │       ├── topic-cache/route.ts     # 选题缓存管理（读取缓存的热榜数据）
 │   │       ├── import-data/route.ts     # CSV/JSON 数据导入
-│   │       ├── config/route.ts          # 平台配置 GET/POST（飞书/抖音/台账凭证）
+│   │       ├── config/route.ts          # 平台配置 GET/POST（抖音/LLM凭证）
+│   │       ├── knowledge/route.ts       # 知识库管理（文档导入/语义搜索/列表）
 │   │       ├── workflows/route.ts       # 工作流 CRUD（创建/编辑/删除）
 │   │       ├── workflows/run/route.ts   # 工作流执行引擎（逐模块串行）
 │   │       ├── workflows/templates/route.ts # 模块模板和模型列表
 │   │       ├── workflows/clone/route.ts     # 从模板克隆工作流
 │   │       ├── workflows/ai-assist/route.ts # AI 工作流助手（对话式生成工作流）
-│   │       ├── feishu/                  # 飞书集成 API
-│   │       │   ├── auth/route.ts        # OAuth 登录发起
-│   │       │   ├── callback/route.ts    # OAuth 回调处理
-│   │       │   ├── status/route.ts      # 登录状态检查
-│   │       │   ├── sync/bitable/route.ts   # 多维表数据同步
-│   │       │   ├── sync/wiki/route.ts      # 知识库数据同步
-│   │       │   ├── sync/docs/route.ts      # 云文档数据同步
-│   │       │   ├── sync/contacts/route.ts  # 通讯录/团队成员同步
-│   │       │   └── bitable/
-│   │       │       ├── create-table/route.ts # 创建台账多维表（17字段）
-│   │       │       └── add-record/route.ts   # 向台账写入记录
 │   │       └── douyin/                  # 抖音集成 API
 │   │           ├── auth/route.ts        # OAuth 登录发起
 │   │           ├── callback/route.ts    # OAuth 回调处理
@@ -76,7 +67,6 @@
 │   ├── lib/                      # 工具库
 │   │   ├── utils.ts              # 通用工具函数 (cn)
 │   │   ├── llm-config.ts         # LLM 多模型配置常量
-│   │   ├── feishu-client.ts      # 飞书 API 客户端封装
 │   │   ├── douyin-client.ts      # 抖音开放平台 API 客户端封装
 │   │   ├── platform-config.ts    # 平台配置存储工具（.platform-config.json）
 │   │   ├── workflow-store.ts     # 工作流存储工具（.workflows.json）

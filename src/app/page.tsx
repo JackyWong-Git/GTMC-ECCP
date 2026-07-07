@@ -104,7 +104,7 @@ export default function DashboardPage() {
       <div>
         <h1 className="text-2xl font-bold text-slate-900">运营总览</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Coze × 飞书自动化运营工作流 · 选题策划 → 脚本生成 → 数据回收
+          自动化运营工作流 · 选题策划 → 脚本生成 → 知识库沉淀 → 数据回收
         </p>
       </div>
 
@@ -193,7 +193,7 @@ export default function DashboardPage() {
               { name: '热点抓取工作流', status: '运行中', lastRun: '每2小时', color: 'bg-emerald-500' },
               { name: '脚本生成工作流', status: '待触发', lastRun: '手动触发', color: 'bg-amber-500' },
               { name: '数据回收工作流', status: '运行中', lastRun: '每日 08:00', color: 'bg-emerald-500' },
-              { name: '飞书通知工作流', status: '运行中', lastRun: '实时', color: 'bg-emerald-500' },
+              { name: '知识库同步工作流', status: '运行中', lastRun: '实时', color: 'bg-emerald-500' },
             ].map((wf) => (
               <div
                 key={wf.name}
@@ -235,7 +235,7 @@ export default function DashboardPage() {
               { task: '视频拍摄与剪辑', owner: '制作团队', icon: Video },
               { task: '多平台手动发布', owner: '运营团队', icon: Play },
               { task: '内容终审与合规检查', owner: '审核负责人', icon: CheckCircle2 },
-              { task: '飞书文档协作编辑', owner: '全体团队', icon: FileText },
+              { task: '知识库文档协作编辑', owner: '全体团队', icon: FileText },
             ].map((item) => (
               <div
                 key={item.task}

@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     // Validate and sanitize modules
     const validModuleTypes: string[] = [
       "llm_analysis", "llm_generate", "llm_summary", "web_search",
-      "data_fetch", "feishu_write", "feishu_notify", "condition", "transform"
+      "data_fetch", "knowledge_save", "knowledge_search", "condition", "transform"
     ];
     const sanitizedModules: WorkflowModule[] = Array.isArray(modules)
       ? modules.map((m: Record<string, unknown>) => ({

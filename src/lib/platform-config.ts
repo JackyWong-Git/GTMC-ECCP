@@ -5,20 +5,10 @@ import path from "path";
  * 平台配置类型
  */
 export interface PlatformConfig {
-  feishu: {
-    appId: string;
-    appSecret: string;
-    redirectUri: string;
-  };
   douyin: {
     clientKey: string;
     clientSecret: string;
     redirectUri: string;
-  };
-  ledger: {
-    appToken: string;
-    tableId: string;
-    autoSync: boolean;
   };
   llm: {
     apiKey: string;
@@ -27,20 +17,10 @@ export interface PlatformConfig {
 }
 
 const DEFAULT_CONFIG: PlatformConfig = {
-  feishu: {
-    appId: "",
-    appSecret: "",
-    redirectUri: "",
-  },
   douyin: {
     clientKey: "",
     clientSecret: "",
     redirectUri: "",
-  },
-  ledger: {
-    appToken: "",
-    tableId: "",
-    autoSync: false,
   },
   llm: {
     apiKey: "",
@@ -67,7 +47,6 @@ function getConfigPath(): string {
 export function getPlatformConfig(): PlatformConfig {
   const configPath = getConfigPath();
 
-  // 尝试从文件读取
   let fileConfig: Partial<PlatformConfig> = {};
   try {
     if (fs.existsSync(configPath)) {
@@ -78,16 +57,7 @@ export function getPlatformConfig(): PlatformConfig {
     // 文件读取失败，使用默认值
   }
 
-  // 合并环境变量（环境变量优先级更高）
   const config: PlatformConfig = {
-    feishu: {
-      appId:
-        process.env.FEISHU_APP_ID || fileConfig.feishu?.appId || "",
-      appSecret:
-        process.env.FEISHU_APP_SECRET || fileConfig.feishu?.appSecret || "",
-      redirectUri:
-        process.env.FEISHU_REDIRECT_URI || fileConfig.feishu?.redirectUri || "",
-    },
     douyin: {
       clientKey:
         process.env.DOUYIN_CLIENT_KEY || fileConfig.douyin?.clientKey || "",
@@ -95,11 +65,6 @@ export function getPlatformConfig(): PlatformConfig {
         process.env.DOUYIN_CLIENT_SECRET || fileConfig.douyin?.clientSecret || "",
       redirectUri:
         process.env.DOUYIN_REDIRECT_URI || fileConfig.douyin?.redirectUri || "",
-    },
-    ledger: {
-      appToken: fileConfig.ledger?.appToken || "",
-      tableId: fileConfig.ledger?.tableId || "",
-      autoSync: fileConfig.ledger?.autoSync ?? true,
     },
     llm: {
       apiKey:
@@ -121,22 +86,6 @@ export function savePlatformConfig(config: PlatformConfig): void {
 }
 
 /**
- * 获取飞书配置（便捷方法）
- */
-export function getFeishuConfig(): {
-  appId: string;
-  appSecret: string;
-  redirectUri: string;
-  isConfigured: boolean;
-} {
-  const config = getPlatformConfig();
-  return {
-    ...config.feishu,
-    isConfigured: !!(config.feishu.appId && config.feishu.appSecret),
-  };
-}
-
-/**
  * 获取抖音配置（便捷方法）
  */
 export function getDouyinConfig(): {
@@ -154,7 +103,6 @@ export function getDouyinConfig(): {
 
 /**
  * 获取 LLM 配置（便捷方法）
- * 返回 apiKey 和 baseUrl，用于初始化 coze-coding-dev-sdk 的 Config
  */
 export function getLLMConfig(): {
   apiKey: string;
@@ -170,12 +118,9 @@ export function getLLMConfig(): {
 
 /**
  * 设置 LLM 环境变量
- * 自动从平台配置中读取 API Key 和 Base URL
- * 调用方需要自行 import Config from 'coze-coding-dev-sdk'
  */
 export function setupLLMEnv(): void {
   const llmConfig = getLLMConfig();
-  // 设置环境变量供 SDK 读取（仅在未设置时覆盖）
   if (llmConfig.apiKey && !process.env.OPENAI_API_KEY) {
     process.env.OPENAI_API_KEY = llmConfig.apiKey;
   }

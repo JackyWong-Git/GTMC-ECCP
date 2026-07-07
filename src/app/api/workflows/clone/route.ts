@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     // 将模板模块转换为工作流模块格式
     const modules = template.modules.map((mod) => ({
       id: generateModuleId(),
-      type: mod.type as 'llm_analysis' | 'llm_generate' | 'llm_summary' | 'web_search' | 'data_fetch' | 'feishu_write' | 'feishu_notify' | 'condition' | 'transform',
+      type: mod.type as 'llm_analysis' | 'llm_generate' | 'llm_summary' | 'web_search' | 'data_fetch' | 'knowledge_save' | 'knowledge_search' | 'condition' | 'transform',
       name: mod.name,
       description: mod.description,
       config: mod.config || {},

@@ -11,6 +11,7 @@ import {
   Database,
   FileText,
   Bell,
+  BookOpen,
   GitBranch,
   ArrowRightLeft,
   Loader2,
@@ -80,8 +81,8 @@ const nodeIcons: Record<string, typeof Sparkles> = {
   llm_summary: Sparkles,
   web_search: Search,
   data_fetch: Database,
-  feishu_write: FileText,
-  feishu_notify: Bell,
+  knowledge_save: BookOpen,
+  knowledge_search: Search,
   condition: GitBranch,
   transform: ArrowRightLeft,
 };
@@ -92,8 +93,8 @@ const nodeColors: Record<string, { bg: string; border: string; text: string; dot
   llm_summary: { bg: 'bg-indigo-50', border: 'border-indigo-300', text: 'text-indigo-700', dot: 'bg-indigo-500' },
   web_search: { bg: 'bg-amber-50', border: 'border-amber-300', text: 'text-amber-700', dot: 'bg-amber-500' },
   data_fetch: { bg: 'bg-emerald-50', border: 'border-emerald-300', text: 'text-emerald-700', dot: 'bg-emerald-500' },
-  feishu_write: { bg: 'bg-cyan-50', border: 'border-cyan-300', text: 'text-cyan-700', dot: 'bg-cyan-500' },
-  feishu_notify: { bg: 'bg-pink-50', border: 'border-pink-300', text: 'text-pink-700', dot: 'bg-pink-500' },
+  knowledge_save: { bg: 'bg-cyan-50', border: 'border-cyan-300', text: 'text-cyan-700', dot: 'bg-cyan-500' },
+  knowledge_search: { bg: 'bg-teal-50', border: 'border-teal-300', text: 'text-teal-700', dot: 'bg-teal-500' },
   condition: { bg: 'bg-orange-50', border: 'border-orange-300', text: 'text-orange-700', dot: 'bg-orange-500' },
   transform: { bg: 'bg-slate-100', border: 'border-slate-300', text: 'text-slate-700', dot: 'bg-slate-500' },
 };
@@ -499,7 +500,7 @@ function WorkflowEditorContent() {
                     <Wand2 className="w-8 h-8 text-blue-300 mx-auto mb-3" />
                     <p className="text-xs text-slate-500 mb-4">描述你的运营需求，AI 会自动创建工作流</p>
                     <div className="space-y-2">
-                      {['帮我创建一个自动抓取抖音热点并生成脚本的工作流', '创建一个数据分析工作流，自动汇总播放量和互动数据', '创建飞书通知流，定时推送运营报告到群里'].map((hint) => (
+                      {['帮我创建一个自动抓取抖音热点并生成脚本的工作流', '创建一个数据分析工作流，自动汇总播放量和互动数据', '创建一个内容生成工作流，自动将产出存入知识库'].map((hint) => (
                         <button
                           key={hint}
                           onClick={() => { setAiInput(hint); }}

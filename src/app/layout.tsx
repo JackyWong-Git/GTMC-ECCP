@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     template: '%s | 运营自动化中心',
   },
   description:
-    '基于 Coze 和飞书的自动化运营工作流，实现选题策划、脚本生成、数据汇总与团队协作的全流程自动化管理。',
+    '基于 Coze 的自动化运营工作流管理平台，实现选题策划、脚本生成、知识库沉淀与数据汇总的全流程自动化管理。',
 };
 
 export default function RootLayout({

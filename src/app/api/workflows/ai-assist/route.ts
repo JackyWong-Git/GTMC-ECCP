@@ -22,8 +22,8 @@ const SYSTEM_PROMPT = `你是一个运营工作流设计专家，帮助用户创
 - llm_summary: AI 摘要总结（适合对数据进行汇总和摘要）
 - web_search: 网络搜索（适合搜索互联网获取实时信息和热点数据）
 - data_fetch: 数据抓取（适合从指定 URL 抓取数据）
-- feishu_write: 飞书写入（适合将数据写入飞书多维表）
-- feishu_notify: 飞书通知（适合发送飞书消息通知）
+- knowledge_save: 知识库写入（适合将数据存入云文档知识库）
+- knowledge_search: 知识库搜索（适合从知识库检索参考素材）
 - condition: 条件判断（适合根据条件分支执行不同逻辑）
 - transform: 数据转换（适合对数据进行格式转换、过滤等处理）
 

@@ -8,8 +8,8 @@ export type ModuleType =
   | "llm_summary"
   | "web_search"
   | "data_fetch"
-  | "feishu_write"
-  | "feishu_notify"
+  | "knowledge_save"
+  | "knowledge_search"
   | "condition"
   | "transform";
 
@@ -188,18 +188,18 @@ export const MODULE_TEMPLATES: Record<ModuleType, Omit<WorkflowModule, "id">> = 
     config: { platform: "douyin", dataType: "trending" },
     enabled: true,
   },
-  feishu_write: {
-    type: "feishu_write",
-    name: "飞书写入",
-    description: "将数据写入飞书多维表或文档",
-    config: { target: "bitable" },
+  knowledge_save: {
+    type: "knowledge_save",
+    name: "知识库写入",
+    description: "将数据存入云文档知识库，支持语义检索",
+    config: { contentType: "脚本" },
     enabled: true,
   },
-  feishu_notify: {
-    type: "feishu_notify",
-    name: "飞书通知",
-    description: "向飞书群发送通知消息",
-    config: { messageType: "text" },
+  knowledge_search: {
+    type: "knowledge_search",
+    name: "知识库搜索",
+    description: "从知识库中检索相关内容作为参考素材",
+    config: { topK: 5 },
     enabled: true,
   },
   condition: {
