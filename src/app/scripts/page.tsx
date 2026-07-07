@@ -475,92 +475,90 @@ ${streamContent}
     setScrapeResult('');
 
     try {
-      // 使用搜索 API 获取视频信息
-      const searchResponse = await fetch('/api/douyin-trending', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: videoUrl, count: 5 }),
-      });
+      // 判断是否是 URL
+      const isUrl = videoUrl.startsWith('http://') || videoUrl.startsWith('https://');
 
-      if (!searchResponse.ok) {
-        setScrapeResult('视频信息获取失败，请检查链接或关键词是否有效');
+      if (isUrl) {
+        // 使用 FetchClient 直接获取视频页面内容
+        const videoResponse = await fetch('/api/douyin-trending', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            searchType: 'video',
+            videoUrl: videoUrl,
+          }),
+        });
+
+        if (!videoResponse.ok) {
+          setScrapeResult('视频页面获取失败，请检查链接是否有效');
+          setIsScraping(false);
+          return;
+        }
+
+        const videoData = await videoResponse.json();
+
+        if (!videoData.success) {
+          setScrapeResult(videoData.error || '视频内容获取失败');
+          setIsScraping(false);
+          return;
+        }
+
+        const videoInfo = videoData.data?.videoInfo;
+        if (!videoInfo || !videoInfo.script) {
+          setScrapeResult('未能从视频页面提取到文案内容');
+          setIsScraping(false);
+          return;
+        }
+
+        // 格式化输出
+        const result = `## ${videoInfo.title}
+
+### 视频文案
+${videoInfo.script}
+
+${videoInfo.description ? `### 视频描述\n${videoInfo.description}\n` : ''}
+${videoInfo.tags?.length ? `### 标签\n${videoInfo.tags.join('、')}\n` : ''}
+${videoInfo.highlights?.length ? `### 亮点\n${videoInfo.highlights.map((h: string) => `- ${h}`).join('\n')}\n` : ''}
+### 来源
+${videoInfo.sourceUrl}`;
+
+        setScrapeResult(result);
         setIsScraping(false);
-        return;
-      }
+      } else {
+        // 使用搜索 API 获取视频信息（关键词搜索模式）
+        const searchResponse = await fetch('/api/douyin-trending', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: videoUrl, count: 5 }),
+        });
 
-      const searchData = await searchResponse.json();
-      const videoInfo = searchData.data?.topics?.slice(0, 3) || [];
+        if (!searchResponse.ok) {
+          setScrapeResult('视频信息获取失败，请检查关键词是否有效');
+          setIsScraping(false);
+          return;
+        }
 
-      if (videoInfo.length === 0) {
-        setScrapeResult('未找到相关视频内容，请尝试更换关键词或链接');
-        setIsScraping(false);
-        return;
-      }
+        const searchData = await searchResponse.json();
+        const videoInfo = searchData.data?.topics?.slice(0, 3) || [];
 
-      // 提取视频文案
-      const extractPrompt = `你是一位专业的视频文案提取师。请从以下视频信息中提取核心文案内容。
+        if (videoInfo.length === 0) {
+          setScrapeResult('未找到相关视频内容，请尝试更换关键词');
+          setIsScraping(false);
+          return;
+        }
 
-## 视频信息
-${videoInfo.map((v: { title: string; snippet?: string }, i: number) =>
-  `视频${i + 1}：${v.title}\n${v.snippet || ''}`
+        // 格式化搜索结果
+        const result = `## 搜索结果：${videoUrl}
+
+${videoInfo.map((v: { title: string; snippet?: string; url?: string }, i: number) =>
+  `### ${i + 1}. ${v.title}\n${v.snippet || '暂无描述'}\n${v.url ? `链接：${v.url}` : ''}`
 ).join('\n\n')}
 
-## 提取要求
-1. 提取视频的核心文案/脚本内容
-2. 保留原始的表达方式和语气
-3. 如果有多条视频，分别列出每条的文案
-4. 用清晰的分隔区分不同视频的文案
+---
+提示：如需提取完整文案，请直接输入视频链接`;
 
-请直接输出提取的文案内容，不要添加分析或评论。`;
-
-      const response = await fetch('/api/generate-script', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topicTitle: '视频文案提取',
-          platform: 'douyin',
-          style: 'professional',
-          duration: '1-3分钟',
-          systemPrompt: extractPrompt,
-        }),
-      });
-
-      if (!response.ok) {
-        setScrapeResult('文案提取失败');
+        setScrapeResult(result);
         setIsScraping(false);
-        return;
-      }
-
-      const reader = response.body?.getReader();
-      if (!reader) {
-        setScrapeResult('无法读取流式响应');
-        setIsScraping(false);
-        return;
-      }
-
-      const decoder = new TextDecoder();
-      let fullContent = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const text = decoder.decode(value, { stream: true });
-        const lines = text.split('\n');
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (data.content) {
-                fullContent += data.content;
-                setScrapeResult(fullContent);
-              }
-            } catch {
-              // skip
-            }
-          }
-        }
       }
     } catch (err) {
       setScrapeResult(`请求失败：${err instanceof Error ? err.message : '网络错误'}`);

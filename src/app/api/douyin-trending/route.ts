@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SearchClient, Config, HeaderUtils, LLMClient } from "coze-coding-dev-sdk";
+import { SearchClient, Config, HeaderUtils, LLMClient, FetchClient } from "coze-coding-dev-sdk";
 import { MODEL_CONFIG } from "@/lib/llm-config";
 import { saveTopicCache } from "@/lib/topic-cache";
 import { setupLLMEnv } from "@/lib/platform-config";
@@ -202,8 +202,9 @@ export async function POST(request: NextRequest) {
       timeRange?: string;
       sites?: string;
       count?: number;
-      searchType?: "topics" | "images" | "recommend";
+      searchType?: "topics" | "images" | "recommend" | "video";
       existingTopics?: string[];
+      videoUrl?: string;
     };
 
     const {
@@ -215,6 +216,7 @@ export async function POST(request: NextRequest) {
       count = 20,
       searchType = "topics",
       existingTopics,
+      videoUrl,
     } = body;
 
     // 设置 LLM 环境变量
@@ -241,6 +243,114 @@ export async function POST(request: NextRequest) {
             sourceUrl: item.url,
           })),
           query: searchQuery,
+        },
+      });
+    }
+
+    // 视频扒取模式 - 使用 FetchClient 获取视频页面真实内容
+    if (searchType === "video" && videoUrl) {
+      console.log(`[video-scrape] Fetching video page: ${videoUrl}`);
+      
+      const fetchClient = new FetchClient(config, customHeaders);
+      const fetchResponse = await fetchClient.fetch(videoUrl);
+
+      if (fetchResponse.status_code !== 0) {
+        console.error(`[video-scrape] Fetch failed: ${fetchResponse.status_message}`);
+        return NextResponse.json({
+          success: false,
+          error: `无法访问视频页面: ${fetchResponse.status_message || "未知错误"}`,
+        });
+      }
+
+      // 提取页面文本内容
+      const pageText = fetchResponse.content
+        .filter((item) => item.type === "text")
+        .map((item) => item.text)
+        .join("\n");
+
+      const pageTitle = fetchResponse.title || "未知标题";
+
+      console.log(`[video-scrape] Page title: ${pageTitle}`);
+      console.log(`[video-scrape] Content length: ${pageText.length} chars`);
+
+      // 使用 LLM 从页面内容中提取视频文案
+      const llmClient = new LLMClient(config, customHeaders);
+      const llmResponse = await llmClient.invoke([
+        {
+          role: "system",
+          content: `你是一个专业的视频内容分析师。你的任务是从网页内容中提取视频的核心文案/脚本。
+
+提取规则：
+1. 优先提取视频的口播文案、字幕内容或旁白文字
+2. 如果页面包含视频描述、简介，也要提取
+3. 如果有评论区的高赞评论，可以提取作为参考
+4. 忽略广告、导航、推荐等无关内容
+5. 保持原文的完整性和准确性，不要编造内容
+
+输出格式：
+{
+  "title": "视频标题",
+  "script": "视频核心文案/脚本（完整提取，不要省略）",
+  "description": "视频描述/简介",
+  "tags": ["标签1", "标签2"],
+  "highlights": ["亮点1", "亮点2"]
+}
+
+如果页面内容中没有找到视频文案，请如实说明，不要编造。`,
+        },
+        {
+          role: "user",
+          content: `请从以下网页内容中提取视频文案：
+
+网页标题：${pageTitle}
+
+网页内容：
+${pageText.substring(0, 8000)}
+
+请提取视频的核心文案内容。`,
+        },
+      ], {
+        model: MODEL_CONFIG.SCRIPT_GENERATION.model,
+        temperature: 0.3,
+      });
+
+      let videoData: {
+        title: string;
+        script: string;
+        description: string;
+        tags: string[];
+        highlights: string[];
+      } = {
+        title: pageTitle,
+        script: "",
+        description: "",
+        tags: [],
+        highlights: [],
+      };
+
+      try {
+        const content = llmResponse.content || "";
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          videoData = JSON.parse(jsonMatch[0]);
+        }
+      } catch {
+        // Fallback: use raw page text
+        videoData.script = pageText.substring(0, 2000);
+        videoData.description = `从页面提取的内容（${pageTitle}）`;
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          videoInfo: {
+            title: videoData.title || pageTitle,
+            script: videoData.script || "未能提取到视频文案",
+            description: videoData.description || "",
+            tags: videoData.tags || [],
+            highlights: videoData.highlights || [],
+            sourceUrl: videoUrl,
+          },
         },
       });
     }
