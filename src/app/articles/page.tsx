@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -53,6 +53,25 @@ export default function ArticlesPage() {
   const [copied, setCopied] = useState(false);
   const [history, setHistory] = useState<ArticleHistory[]>([]);
   const contentRef = useRef<HTMLTextAreaElement>(null);
+
+  // 从 localStorage 加载文章历史
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('article-history');
+      if (saved) {
+        setHistory(JSON.parse(saved));
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }, []);
+
+  // 保存文章历史到 localStorage
+  useEffect(() => {
+    if (history.length > 0) {
+      localStorage.setItem('article-history', JSON.stringify(history));
+    }
+  }, [history]);
 
   // 添加关键词
   const addKeyword = () => {

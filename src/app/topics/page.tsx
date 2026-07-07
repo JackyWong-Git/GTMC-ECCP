@@ -139,6 +139,25 @@ export default function TopicsPage() {
   const [isLoadingCache, setIsLoadingCache] = useState(false);
   const [cacheInfo, setCacheInfo] = useState<{ count: number; fetchedAt: string } | null>(null);
 
+  // 从 localStorage 加载选题
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('topics');
+      if (saved) {
+        setTopics(JSON.parse(saved));
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }, []);
+
+  // 保存选题到 localStorage
+  useEffect(() => {
+    if (topics.length > 0) {
+      localStorage.setItem('topics', JSON.stringify(topics));
+    }
+  }, [topics]);
+
   // Topic analysis state
   const [analyzingTopic, setAnalyzingTopic] = useState<Topic | null>(null);
   const [analysisResult, setAnalysisResult] = useState<TopicAnalysisResult | null>(null);

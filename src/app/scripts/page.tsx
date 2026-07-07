@@ -138,6 +138,25 @@ export default function ScriptsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadedFileName, setUploadedFileName] = useState('');
 
+  // 从 localStorage 加载脚本
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('scripts');
+      if (saved) {
+        setScripts(JSON.parse(saved));
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }, []);
+
+  // 保存脚本到 localStorage
+  useEffect(() => {
+    if (scripts.length > 0) {
+      localStorage.setItem('scripts', JSON.stringify(scripts));
+    }
+  }, [scripts]);
+
   // 自定义 Agent 状态
   const [customAgents, setCustomAgents] = useState<AgentPreset[]>([]);
   const [showAgentForm, setShowAgentForm] = useState(false);
