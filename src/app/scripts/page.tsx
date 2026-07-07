@@ -26,6 +26,8 @@ import {
   Trash2,
   Settings2,
   Palette,
+  Upload,
+  FileVideo,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -133,6 +135,8 @@ export default function ScriptsPage() {
   const [scrapeResult, setScrapeResult] = useState('');
   const [activeTab, setActiveTab] = useState<'create' | 'scrape'>('create');
   const editorRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadedFileName, setUploadedFileName] = useState('');
 
   // 自定义 Agent 状态
   const [customAgents, setCustomAgents] = useState<AgentPreset[]>([]);
@@ -548,6 +552,107 @@ ${agentStyleGuide}
     }
   }, [scrapeResult, topicTitle, platform, selectedPreset, videoUrl]);
 
+  // 文件上传处理
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadedFileName(file.name);
+    setIsScraping(true);
+    setScrapeResult('');
+
+    const isVideo = file.type.startsWith('video/');
+    const isText = file.type.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.md');
+
+    try {
+      if (isText) {
+        // 文本文件直接读取内容
+        const text = await file.text();
+        setScrapeResult(text);
+        setIsScraping(false);
+      } else if (isVideo) {
+        // 视频文件：上传到服务器提取文案
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('type', 'video');
+
+        const response = await fetch('/api/knowledge', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error('视频上传失败');
+        }
+
+        const result = await response.json();
+        if (result.success) {
+          // 视频上传后，使用 AI 提取文案
+          const extractResponse = await fetch('/api/generate-script', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              topicTitle: `从视频 ${file.name} 提取文案`,
+              platform: 'douyin',
+              style: 'informative',
+              duration: '1-3分钟',
+              systemPrompt: `你是一位专业的视频文案提取师。请根据以下视频文件信息，提取或推测视频的核心文案内容。
+
+视频文件名：${file.name}
+文件大小：${(file.size / 1024 / 1024).toFixed(2)} MB
+
+请提取视频中的：
+1. 开场白/钩子
+2. 核心内容要点
+3. 结尾/行动号召
+
+如果无法直接提取，请根据视频类型推测可能的文案结构。`,
+            }),
+          });
+
+          if (extractResponse.ok && extractResponse.body) {
+            const reader = extractResponse.body.getReader();
+            const decoder = new TextDecoder();
+            let fullContent = '';
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+
+              const text = decoder.decode(value, { stream: true });
+              const lines = text.split('\n');
+
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  try {
+                    const data = JSON.parse(line.slice(6));
+                    if (data.content) {
+                      fullContent += data.content;
+                      setScrapeResult(fullContent);
+                    }
+                  } catch {
+                    // skip
+                  }
+                }
+              }
+            }
+          }
+        }
+        setIsScraping(false);
+      } else {
+        throw new Error('不支持的文件类型，请上传视频或文本文件');
+      }
+    } catch (err) {
+      setScrapeResult(`文件处理失败：${err instanceof Error ? err.message : '未知错误'}`);
+      setIsScraping(false);
+    }
+
+    // 清空 input 以便重复上传同一文件
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, []);
+
   // 复制脚本
   const handleCopy = useCallback((content: string) => {
     navigator.clipboard.writeText(content);
@@ -793,14 +898,15 @@ ${agentStyleGuide}
             <div className="flex items-center gap-2">
               <Film className="h-4 w-4 text-blue-500" />
               <CardTitle className="text-sm font-semibold text-slate-800">
-                扒视频文案
+                扒文案
               </CardTitle>
             </div>
             <CardDescription className="text-xs text-slate-400">
-              输入爆款视频链接或关键词，AI 提取文案后可根据 Agent 风格再创作
+              输入视频链接、上传视频文件或文案文件，AI 提取文案后可根据 Agent 风格再创作
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* URL 输入 */}
             <div className="flex items-center gap-3">
               <div className="relative flex-1">
                 <Link className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -826,6 +932,40 @@ ${agentStyleGuide}
                 )}
                 {isScraping ? '提取中...' : '扒文案'}
               </Button>
+            </div>
+
+            {/* 分隔线 */}
+            <div className="my-4 flex items-center gap-3">
+              <div className="h-px flex-1 bg-slate-200" />
+              <span className="text-xs text-slate-400">或</span>
+              <div className="h-px flex-1 bg-slate-200" />
+            </div>
+
+            {/* 文件上传区域 */}
+            <div
+              className="relative cursor-pointer rounded-lg border-2 border-dashed border-blue-200 bg-blue-50/30 p-6 text-center transition-colors hover:border-blue-400 hover:bg-blue-50/50"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="video/*,.txt,.md,text/plain"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+              <Upload className="mx-auto h-8 w-8 text-blue-400" />
+              <p className="mt-2 text-sm font-medium text-slate-600">
+                点击上传视频或文案文件
+              </p>
+              <p className="mt-1 text-xs text-slate-400">
+                支持视频文件（MP4、MOV）或文本文件（TXT、MD）
+              </p>
+              {uploadedFileName && (
+                <div className="mt-3 flex items-center justify-center gap-2">
+                  <FileVideo className="h-4 w-4 text-blue-500" />
+                  <span className="text-xs text-blue-600">{uploadedFileName}</span>
+                </div>
+              )}
             </div>
 
             {/* Scrape Result - 提取的文案 */}
