@@ -192,16 +192,114 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST 方法支持自定义搜索
+// POST 方法支持自定义搜索（增强版）
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json() as {
       query?: string;
       source?: string;
       keywords?: string[];
+      timeRange?: string;
+      sites?: string;
+      count?: number;
+      searchType?: "topics" | "images" | "recommend";
+      existingTopics?: string[];
     };
 
-    const { query, source, keywords } = body;
+    const {
+      query,
+      source,
+      keywords,
+      timeRange = "1w",
+      sites,
+      count = 20,
+      searchType = "topics",
+      existingTopics,
+    } = body;
+
+    // 设置 LLM 环境变量
+    setupLLMEnv();
+
+    const customHeaders = HeaderUtils.extractForwardHeaders(request.headers);
+    const config = new Config();
+
+    // 图片搜索模式
+    if (searchType === "images") {
+      const searchQuery = query || keywords?.join(" ") || "汽车 热门";
+      const searchClient = new SearchClient(config, customHeaders);
+      const response = await searchClient.imageSearch(searchQuery, count);
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          images: response.image_items.map((item) => ({
+            title: item.title || "无标题",
+            url: item.image.url,
+            width: item.image.width,
+            height: item.image.height,
+            source: item.site_name || "未知",
+            sourceUrl: item.url,
+          })),
+          query: searchQuery,
+        },
+      });
+    }
+
+    // 选题推荐模式
+    if (searchType === "recommend" && existingTopics && existingTopics.length > 0) {
+      const llmClient = new LLMClient(config, customHeaders);
+      const llmResponse = await llmClient.invoke([
+        {
+          role: "system",
+          content: `你是一个专业的内容策划专家。根据已有的选题，推荐相关的热门选题方向。
+要求：
+1. 推荐 5-8 个相关但有差异化的选题
+2. 每个选题要有明确的内容角度
+3. 考虑当前热点趋势
+4. 严格按照 JSON 格式输出
+
+输出格式：
+{
+  "recommendations": [
+    {
+      "title": "推荐选题标题",
+      "angle": "内容切入角度",
+      "reason": "推荐理由（30字以内）",
+      "heatScore": 预估热度(1-100)
+    }
+  ]
+}`,
+        },
+        {
+          role: "user",
+          content: `已有选题：\n${existingTopics.map((t, i) => `${i + 1}. ${t}`).join("\n")}\n\n请推荐相关的热门选题方向。`,
+        },
+      ], {
+        model: MODEL_CONFIG.HOT_TOPIC_ANALYSIS.model,
+        temperature: 0.8,
+      });
+
+      let recommendations: Array<{ title: string; angle: string; reason: string; heatScore: number }> = [];
+      try {
+        const content = llmResponse.content || "";
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]) as { recommendations: typeof recommendations };
+          recommendations = parsed.recommendations || [];
+        }
+      } catch {
+        // Fallback: extract titles from response
+        recommendations = [
+          { title: "行业趋势分析", angle: "深度解读", reason: "基于现有选题延伸", heatScore: 75 },
+          { title: "用户案例分享", angle: "真实故事", reason: "增加内容可信度", heatScore: 70 },
+        ];
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: { recommendations },
+      });
+    }
 
     // 构建搜索查询
     let searchQuery = query || "";
@@ -211,14 +309,108 @@ export async function POST(request: NextRequest) {
       searchQuery = "抖音热榜 今日热门话题";
     }
 
-    // 重定向到 GET 处理
-    const url = new URL(request.url);
-    url.searchParams.set("query", searchQuery);
-    url.searchParams.set("source", source || "custom");
+    // 使用 advancedSearch 支持更多过滤选项
+    const searchClient = new SearchClient(config, customHeaders);
+    const response = await searchClient.advancedSearch(searchQuery, {
+      searchType: "web",
+      count,
+      timeRange,
+      sites,
+      needSummary: true,
+      needContent: false,
+      needUrl: true,
+    });
 
-    return GET(new NextRequest(url.toString(), { headers: request.headers }));
+    if (!response.web_items || response.web_items.length === 0) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          topics: [],
+          summary: "暂无搜索结果",
+          fetchedAt: new Date().toISOString(),
+          query: searchQuery,
+          source: source || "custom",
+          timeRange,
+        },
+      });
+    }
+
+    const llmClient = new LLMClient(config, customHeaders);
+
+    const searchResultsText = response.web_items
+      .map((item, i) => `${i + 1}. ${item.title}\n   来源: ${item.site_name || "未知"}\n   摘要: ${item.snippet}\n   URL: ${item.url || "无"}`)
+      .join("\n\n");
+
+    const categoryHint = source === "automotive" ? "汽车/新能源/智能驾驶/车企/销量" :
+      source === "weibo" ? "微博热搜/汽车话题/新车/车展" :
+      source === "crisis" ? "危机/裁员/召回/供应链/补贴" :
+      "社会/娱乐/科技/生活/教育/健康/财经/体育/汽车";
+
+    const llmResponse = await llmClient.invoke([
+      {
+        role: "system",
+        content: `你是一个热点内容分析师。根据搜索结果，提取并整理热门话题。
+重点关注以下分类：${categoryHint}
+请严格按照以下 JSON 格式输出，不要输出其他内容：
+{
+  "topics": [
+    {
+      "rank": 序号(数字),
+      "title": "话题标题",
+      "heatScore": 热度分数(1000-10000之间的整数),
+      "category": "分类(汽车/新能源/智能驾驶/车企/销量/危机/综合)",
+      "source": "来源平台(抖音/微博/视频号/快手/综合)",
+      "url": "相关链接(如有)",
+      "snippet": "简短描述(50字以内)"
+    }
+  ]
+}
+最多提取15个热点话题，按热度从高到低排序。`,
+      },
+      {
+        role: "user",
+        content: `以下是搜索到的热点内容，请分析并结构化输出：\n\n${searchResultsText}\n\nAI摘要：${response.summary || "无"}`,
+      },
+    ], {
+      model: MODEL_CONFIG.HOT_TOPIC_ANALYSIS.model,
+      temperature: MODEL_CONFIG.HOT_TOPIC_ANALYSIS.temperature,
+    });
+
+    let topics: TrendingTopic[] = [];
+    try {
+      const content = llmResponse.content || "";
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]) as { topics: TrendingTopic[] };
+        topics = parsed.topics || [];
+      }
+    } catch {
+      topics = response.web_items.slice(0, 15).map((item, i) => ({
+        rank: i + 1,
+        title: item.title,
+        heatScore: Math.floor(9000 - i * 400 + Math.random() * 200),
+        category: "综合",
+        source: source === "weibo" ? "微博" : source === "automotive" ? "汽车行业" : "综合",
+        url: item.url || undefined,
+        snippet: item.snippet?.substring(0, 50) || "",
+        publishTime: item.publish_time || undefined,
+      }));
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        topics,
+        summary: response.summary || "",
+        totalResults: response.web_items.length,
+        fetchedAt: new Date().toISOString(),
+        query: searchQuery,
+        source: source || "custom",
+        timeRange,
+      },
+    });
   } catch (error) {
-    console.error("自定义搜索失败:", error);
+    console.error("增强搜索失败:", error);
     return NextResponse.json(
       { error: "搜索失败，请稍后重试" },
       { status: 500 }

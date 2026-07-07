@@ -146,6 +146,13 @@ export default function TopicsPage() {
   const [analysisModel, setAnalysisModel] = useState('');
   const [audienceFilter, setAudienceFilter] = useState<string>('all');
 
+  // Enhanced search state
+  const [timeRange, setTimeRange] = useState<string>('1w');
+  const [searchImages, setSearchImages] = useState<Array<{ title: string; url: string; source: string }>>([]);
+  const [isSearchingImages, setIsSearchingImages] = useState(false);
+  const [recommendations, setRecommendations] = useState<Array<{ title: string; angle: string; reason: string; heatScore: number }>>([]);
+  const [isRecommending, setIsRecommending] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load cache info on mount
@@ -185,35 +192,42 @@ export default function TopicsPage() {
     setIsFetching(true);
     try {
       const searchQuery = query || customQuery || undefined;
-      const url = searchQuery
-        ? `/api/douyin-trending?query=${encodeURIComponent(searchQuery)}`
-        : '/api/douyin-trending';
-      
+
       // Add timeout for long-running requests
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
-      
-      const res = await fetch(url, { signal: controller.signal });
+
+      const res = await fetch('/api/douyin-trending', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: searchQuery,
+          timeRange,
+          count: 20,
+          searchType: 'topics',
+        }),
+        signal: controller.signal,
+      });
       clearTimeout(timeoutId);
-      
+
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       }
-      
+
       const data = await res.json();
-      if (data.success && data.data && data.data.length > 0) {
-        const newTopics: Topic[] = data.data.map(
-          (item: { title: string; heat: number; platform: string }, idx: number) => ({
+      if (data.success && data.data && data.data.topics && data.data.topics.length > 0) {
+        const newTopics: Topic[] = data.data.topics.map(
+          (item: { title: string; heatScore: number; source: string; category: string }, idx: number) => ({
             id: Date.now() + idx,
             title: item.title,
-            platform: item.platform || '抖音',
-            heat: item.heat || 0,
-            likes: Math.floor((item.heat || 0) * 0.08),
-            comments: Math.floor((item.heat || 0) * 0.02),
+            platform: item.source || '综合',
+            heat: item.heatScore || 0,
+            likes: Math.floor((item.heatScore || 0) * 0.08),
+            comments: Math.floor((item.heatScore || 0) * 0.02),
             status: '选题评估' as TopicStatus,
             assignee: '待分配',
             publishDate: new Date().toISOString().split('T')[0],
-            tags: [item.platform || '抖音', '热榜'],
+            tags: [item.category || '热点', item.source || '综合'],
           })
         );
         setTopics((prev) => [...newTopics, ...prev]);
@@ -232,6 +246,61 @@ export default function TopicsPage() {
       }
     } finally {
       setIsFetching(false);
+    }
+  };
+
+  // 图片搜索
+  const handleSearchImages = async (query: string) => {
+    if (!query.trim()) return;
+    setIsSearchingImages(true);
+    setSearchImages([]);
+    try {
+      const res = await fetch('/api/douyin-trending', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query,
+          count: 12,
+          searchType: 'images',
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.data && data.data.images) {
+        setSearchImages(data.data.images);
+      }
+    } catch (err) {
+      console.error('Failed to search images:', err);
+    } finally {
+      setIsSearchingImages(false);
+    }
+  };
+
+  // 选题推荐
+  const handleGetRecommendations = async () => {
+    if (topics.length === 0) {
+      alert('请先搜索或导入一些选题');
+      return;
+    }
+    setIsRecommending(true);
+    setRecommendations([]);
+    try {
+      const existingTitles = topics.slice(0, 10).map((t) => t.title);
+      const res = await fetch('/api/douyin-trending', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          searchType: 'recommend',
+          existingTopics: existingTitles,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.data && data.data.recommendations) {
+        setRecommendations(data.data.recommendations);
+      }
+    } catch (err) {
+      console.error('Failed to get recommendations:', err);
+    } finally {
+      setIsRecommending(false);
     }
   };
 
@@ -452,7 +521,7 @@ export default function TopicsPage() {
             </Button>
           </div>
 
-          {/* Custom search input */}
+          {/* Custom search input with time range */}
           <div className="flex items-center gap-2 mb-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -470,11 +539,23 @@ export default function TopicsPage() {
                 className="h-10 rounded-lg border-slate-200 bg-slate-50 pl-9 text-sm"
               />
             </div>
+            <Select value={timeRange} onValueChange={setTimeRange}>
+              <SelectTrigger className="h-10 w-[120px] rounded-lg border-slate-200 text-sm">
+                <Clock className="mr-2 h-3.5 w-3.5 text-slate-400" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1d">近 1 天</SelectItem>
+                <SelectItem value="3d">近 3 天</SelectItem>
+                <SelectItem value="1w">近 1 周</SelectItem>
+                <SelectItem value="1m">近 1 月</SelectItem>
+              </SelectContent>
+            </Select>
             <Button
               size="sm"
               className="gap-1.5 bg-amber-500 text-white hover:bg-amber-600"
               onClick={() => handleFetchTrending(customQuery.trim())}
-              disabled={isFetching || !customQuery.trim()}
+              disabled={isFetching}
             >
               {isFetching ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -482,6 +563,38 @@ export default function TopicsPage() {
                 <Search className="h-3.5 w-3.5" />
               )}
               搜索
+            </Button>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-2 mb-4">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-xs"
+              onClick={() => handleSearchImages(customQuery || '汽车 热门')}
+              disabled={isSearchingImages}
+            >
+              {isSearchingImages ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <FileText className="h-3.5 w-3.5" />
+              )}
+              找配图
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-xs"
+              onClick={handleGetRecommendations}
+              disabled={isRecommending || topics.length === 0}
+            >
+              {isRecommending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
+              AI 推荐选题
             </Button>
           </div>
 
@@ -502,6 +615,83 @@ export default function TopicsPage() {
               ))}
             </div>
           </div>
+
+          {/* Image search results */}
+          {searchImages.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              <p className="text-xs text-slate-500 mb-2">相关配图</p>
+              <div className="grid grid-cols-4 gap-2">
+                {searchImages.slice(0, 8).map((img, idx) => (
+                  <a
+                    key={idx}
+                    href={img.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group relative aspect-video overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
+                  >
+                    <img
+                      src={img.url}
+                      alt={img.title}
+                      className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recommendations */}
+          {recommendations.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              <p className="text-xs text-slate-500 mb-2">AI 推荐选题</p>
+              <div className="space-y-2">
+                {recommendations.map((rec, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-3"
+                  >
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-slate-700">{rec.title}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{rec.angle} · {rec.reason}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-200 bg-amber-50">
+                        热度 {rec.heatScore}
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                        onClick={() => {
+                          setTopics((prev) => [
+                            {
+                              id: Date.now() + idx,
+                              title: rec.title,
+                              platform: 'AI推荐',
+                              heat: rec.heatScore * 100,
+                              likes: 0,
+                              comments: 0,
+                              status: '选题评估',
+                              assignee: '待分配',
+                              publishDate: new Date().toISOString().split('T')[0],
+                              tags: ['AI推荐', rec.angle],
+                            },
+                            ...prev,
+                          ]);
+                        }}
+                      >
+                        加入选题池
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
