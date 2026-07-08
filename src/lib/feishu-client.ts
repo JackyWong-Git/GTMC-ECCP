@@ -142,6 +142,57 @@ export async function listWikiNodes(
 }
 
 /**
+ * 获取知识库节点信息（通过 node token）
+ * 用于从 wiki URL 中提取 node token 后获取文档信息
+ */
+export async function getWikiNodeInfo(
+  config: FeishuConfig,
+  nodeToken: string
+): Promise<{
+  nodeToken: string;
+  objToken: string;
+  objType: string;
+  title: string;
+  spaceId: string;
+}> {
+  const token = await getTenantAccessToken(config);
+
+  const response = await fetch(
+    `${FEISHU_BASE}/wiki/v2/spaces/get_node?token=${nodeToken}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("[feishu] getWikiNodeInfo error:", response.status, errorText);
+    throw new Error(`Failed to get wiki node info: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  if (data.code !== 0) {
+    throw new Error(`Feishu API error: ${data.msg} (code: ${data.code})`);
+  }
+
+  const node = data.data?.node;
+  if (!node) {
+    throw new Error("Wiki node not found");
+  }
+
+  return {
+    nodeToken: node.node_token,
+    objToken: node.obj_token,
+    objType: node.obj_type,
+    title: node.title,
+    spaceId: node.space_id,
+  };
+}
+
+/**
  * 获取文档内容（docx 格式）
  */
 export async function getDocumentContent(
@@ -193,7 +244,9 @@ export async function getDocumentBlocks(
   );
 
   if (!response.ok) {
-    throw new Error(`Failed to get document blocks: ${response.status}`);
+    const errorText = await response.text();
+    console.error("[feishu] getDocumentBlocks error:", response.status, errorText);
+    throw new Error(`Failed to get document blocks: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();

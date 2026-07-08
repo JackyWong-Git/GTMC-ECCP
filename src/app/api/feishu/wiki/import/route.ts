@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDocumentBlocks, type FeishuConfig } from "@/lib/feishu-client";
+import { getDocumentBlocks, getWikiNodeInfo, type FeishuConfig } from "@/lib/feishu-client";
 import { getFeishuConfig as getFeishuPlatformConfig } from "@/lib/platform-config";
 import { KnowledgeClient, Config, DataSourceType } from "coze-coding-dev-sdk";
 
 /**
  * POST /api/feishu/wiki/import - 导入飞书文档到知识库
+ * 支持两种参数：
+ * - nodeToken: 知识库节点 token（从 wiki URL 中提取）
+ * - documentId: 普通文档 ID
  */
 export async function POST(request: NextRequest) {
   try {
@@ -22,17 +25,30 @@ export async function POST(request: NextRequest) {
     };
 
     const body = await request.json();
-    const { documentId, title, tags } = body;
+    console.log("[feishu/wiki/import] Request body:", JSON.stringify(body));
+    const { nodeToken, documentId, title, tags } = body;
 
-    if (!documentId) {
+    // 如果提供的是 nodeToken（知识库文档），先获取实际的 documentId
+    let actualDocumentId = documentId;
+    let documentTitle = title;
+
+    if (nodeToken && !documentId) {
+      console.log("[feishu/wiki/import] Getting wiki node info for:", nodeToken);
+      const nodeInfo = await getWikiNodeInfo(config, nodeToken);
+      actualDocumentId = nodeInfo.objToken;
+      documentTitle = documentTitle || nodeInfo.title;
+      console.log("[feishu/wiki/import] Got node info:", { objToken: nodeInfo.objToken, title: nodeInfo.title });
+    }
+
+    if (!actualDocumentId) {
       return NextResponse.json(
-        { error: "缺少 documentId 参数" },
+        { error: "缺少 documentId 或 nodeToken 参数" },
         { status: 400 }
       );
     }
 
     // Get document content from Feishu
-    const blocks = await getDocumentBlocks(config, documentId);
+    const blocks = await getDocumentBlocks(config, actualDocumentId);
     
     // Convert blocks to text
     const content = blocks
@@ -66,8 +82,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        documentId,
-        title: title || `飞书文档-${documentId}`,
+        documentId: actualDocumentId,
+        nodeToken: nodeToken || null,
+        title: documentTitle || `飞书文档-${actualDocumentId}`,
         contentLength: content.length,
         docIds: result.doc_ids,
         tags: tags || ["飞书", "知识库"],
