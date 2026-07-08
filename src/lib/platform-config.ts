@@ -14,6 +14,10 @@ export interface PlatformConfig {
     apiKey: string;
     baseUrl: string;
   };
+  feishu: {
+    appId: string;
+    appSecret: string;
+  };
 }
 
 const DEFAULT_CONFIG: PlatformConfig = {
@@ -25,6 +29,10 @@ const DEFAULT_CONFIG: PlatformConfig = {
   llm: {
     apiKey: "",
     baseUrl: "",
+  },
+  feishu: {
+    appId: "",
+    appSecret: "",
   },
 };
 
@@ -71,6 +79,12 @@ export function getPlatformConfig(): PlatformConfig {
         process.env.OPENAI_API_KEY || fileConfig.llm?.apiKey || "",
       baseUrl:
         process.env.OPENAI_BASE_URL || fileConfig.llm?.baseUrl || "",
+    },
+    feishu: {
+      appId:
+        process.env.FEISHU_APP_ID || fileConfig.feishu?.appId || "",
+      appSecret:
+        process.env.FEISHU_APP_SECRET || fileConfig.feishu?.appSecret || "",
     },
   };
 
@@ -127,4 +141,19 @@ export function setupLLMEnv(): void {
   if (llmConfig.baseUrl && !process.env.OPENAI_BASE_URL) {
     process.env.OPENAI_BASE_URL = llmConfig.baseUrl;
   }
+}
+
+/**
+ * 获取飞书配置（便捷方法）
+ */
+export function getFeishuConfig(): {
+  appId: string;
+  appSecret: string;
+  isConfigured: boolean;
+} {
+  const config = getPlatformConfig();
+  return {
+    ...config.feishu,
+    isConfigured: !!(config.feishu.appId && config.feishu.appSecret),
+  };
 }

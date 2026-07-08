@@ -27,6 +27,11 @@ export async function GET() {
           baseUrl: config.llm.baseUrl || "",
           isConfigured: !!config.llm.apiKey,
         },
+        feishu: {
+          appId: config.feishu.appId ? `${config.feishu.appId.slice(0, 8)}****` : "",
+          appSecret: config.feishu.appSecret ? "******" : "",
+          isConfigured: !!(config.feishu.appId && config.feishu.appSecret),
+        },
       },
     });
   } catch (error) {
@@ -51,6 +56,7 @@ export async function POST(request: NextRequest) {
     // 白名单校验：只允许写入已知字段
     const allowedDouyinFields = ['clientKey', 'clientSecret', 'redirectUri'];
     const allowedLlmFields = ['apiKey', 'baseUrl'];
+    const allowedFeishuFields = ['appId', 'appSecret'];
 
     const douyin = body.douyin ?? {
       clientKey: body.douyinClientKey,
@@ -60,6 +66,10 @@ export async function POST(request: NextRequest) {
     const llm = body.llm ?? {
       apiKey: body.llmApiKey,
       baseUrl: body.llmBaseUrl,
+    };
+    const feishu = body.feishu ?? {
+      appId: body.feishuAppId,
+      appSecret: body.feishuAppSecret,
     };
 
     // 过滤只允许已知字段
@@ -81,9 +91,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const sanitizedFeishu = { ...currentConfig.feishu };
+    if (feishu && typeof feishu === 'object') {
+      for (const key of allowedFeishuFields) {
+        if (key in feishu && typeof feishu[key] === 'string') {
+          (sanitizedFeishu as Record<string, string>)[key] = feishu[key];
+        }
+      }
+    }
+
     const newConfig: PlatformConfig = {
       douyin: sanitizedDouyin,
       llm: sanitizedLlm,
+      feishu: sanitizedFeishu,
     };
 
     savePlatformConfig(newConfig);
@@ -97,6 +117,9 @@ export async function POST(request: NextRequest) {
         },
         llm: {
           isConfigured: !!newConfig.llm.apiKey,
+        },
+        feishu: {
+          isConfigured: !!(newConfig.feishu.appId && newConfig.feishu.appSecret),
         },
       },
     });

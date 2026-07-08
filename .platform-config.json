@@ -1,0 +1,15 @@
+{
+  "douyin": {
+    "clientKey": "",
+    "clientSecret": "",
+    "redirectUri": ""
+  },
+  "llm": {
+    "apiKey": "",
+    "baseUrl": ""
+  },
+  "feishu": {
+    "appId": "cli_aac71083ebb89be5",
+    "appSecret": "6QAyK4A8PljIdErjqbcrL0WlaatzqAe6"
+  }
+}

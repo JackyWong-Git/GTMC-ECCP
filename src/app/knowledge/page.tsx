@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   BookOpen,
   Search,
@@ -16,6 +16,9 @@ import {
   Globe,
   Clock,
   Tag,
+  FolderOpen,
+  ChevronRight,
+  RefreshCw,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -37,14 +40,29 @@ interface SearchResult {
 interface DocRecord {
   id: string;
   title: string;
-  type: 'text' | 'url';
+  type: 'text' | 'url' | 'feishu';
   content: string;
   createdAt: string;
   tags: string[];
 }
 
+interface FeishuSpace {
+  spaceId: string;
+  name: string;
+  description?: string;
+}
+
+interface FeishuNode {
+  nodeToken: string;
+  objToken: string;
+  objType: string;
+  title: string;
+  hasChild: boolean;
+  parentNodeToken?: string;
+}
+
 export default function KnowledgePage() {
-  const [activeTab, setActiveTab] = useState<'import' | 'search'>('import');
+  const [activeTab, setActiveTab] = useState<'import' | 'search' | 'feishu'>('import');
   const [importType, setImportType] = useState<'text' | 'url'>('text');
   const [importTitle, setImportTitle] = useState('');
   const [importContent, setImportContent] = useState('');
@@ -57,6 +75,15 @@ export default function KnowledgePage() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchTotal, setSearchTotal] = useState(0);
+
+  // Feishu state
+  const [feishuSpaces, setFeishuSpaces] = useState<FeishuSpace[]>([]);
+  const [feishuNodes, setFeishuNodes] = useState<FeishuNode[]>([]);
+  const [selectedSpace, setSelectedSpace] = useState<FeishuSpace | null>(null);
+  const [selectedNode, setSelectedNode] = useState<FeishuNode | null>(null);
+  const [isLoadingFeishu, setIsLoadingFeishu] = useState(false);
+  const [feishuError, setFeishuError] = useState('');
+  const [isImportingFeishu, setIsImportingFeishu] = useState(false);
 
   // 本地文档记录（用于展示历史导入）
   const [docRecords, setDocRecords] = useState<DocRecord[]>(() => {
@@ -75,6 +102,98 @@ export default function KnowledgePage() {
     setDocRecords(records);
     localStorage.setItem('knowledge-docs', JSON.stringify(records));
   }, []);
+
+  // Load Feishu spaces
+  const loadFeishuSpaces = useCallback(async () => {
+    setIsLoadingFeishu(true);
+    setFeishuError('');
+    try {
+      const res = await fetch('/api/feishu/wiki/spaces');
+      const data = await res.json();
+      if (data.success) {
+        setFeishuSpaces(data.data || []);
+      } else {
+        setFeishuError(data.error || '获取飞书知识库失败');
+      }
+    } catch {
+      setFeishuError('网络请求失败，请检查飞书配置');
+    } finally {
+      setIsLoadingFeishu(false);
+    }
+  }, []);
+
+  // Load Feishu nodes for a space
+  const loadFeishuNodes = useCallback(async (spaceId: string, parentToken?: string) => {
+    setIsLoadingFeishu(true);
+    setFeishuError('');
+    try {
+      const params = new URLSearchParams({ action: 'nodes', spaceId });
+      if (parentToken) {
+        params.set('parentToken', parentToken);
+      }
+      const res = await fetch(`/api/feishu/wiki/spaces?${params}`);
+      const data = await res.json();
+      if (data.success) {
+        setFeishuNodes(data.data || []);
+      } else {
+        setFeishuError(data.error || '获取文档列表失败');
+      }
+    } catch {
+      setFeishuError('网络请求失败');
+    } finally {
+      setIsLoadingFeishu(false);
+    }
+  }, []);
+
+  // Import Feishu document
+  const handleImportFeishu = useCallback(async () => {
+    if (!selectedNode) return;
+
+    setIsImportingFeishu(true);
+    setImportResult(null);
+
+    try {
+      const res = await fetch('/api/feishu/wiki/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentId: selectedNode.objToken,
+          title: selectedNode.title,
+          tags: ['飞书', '知识库'],
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setImportResult({ success: true, message: `文档「${selectedNode.title}」已导入知识库` });
+
+        // Save to local records
+        const newRecord: DocRecord = {
+          id: `feishu_${Date.now()}`,
+          title: selectedNode.title,
+          type: 'feishu',
+          content: `飞书文档 - ${selectedNode.objType}`,
+          createdAt: new Date().toISOString(),
+          tags: ['飞书', '知识库'],
+        };
+        saveDocRecords([newRecord, ...docRecords]);
+      } else {
+        setImportResult({ success: false, message: data.error || '导入失败' });
+      }
+    } catch {
+      setImportResult({ success: false, message: '网络请求失败' });
+    } finally {
+      setIsImportingFeishu(false);
+    }
+  }, [selectedNode, docRecords, saveDocRecords]);
+
+  // Load spaces when switching to feishu tab
+  useEffect(() => {
+    if (activeTab === 'feishu' && feishuSpaces.length === 0) {
+      loadFeishuSpaces();
+    }
+  }, [activeTab, feishuSpaces.length, loadFeishuSpaces]);
 
   // 导入文档
   const handleImport = useCallback(async () => {
@@ -189,6 +308,17 @@ export default function KnowledgePage() {
         >
           <Upload className="h-4 w-4" />
           文档导入
+        </button>
+        <button
+          onClick={() => setActiveTab('feishu')}
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'feishu'
+              ? 'bg-cyan-100 text-cyan-700'
+              : 'text-slate-500 hover:bg-slate-100'
+          }`}
+        >
+          <FolderOpen className="h-4 w-4" />
+          飞书知识库
         </button>
         <button
           onClick={() => setActiveTab('search')}
@@ -354,6 +484,8 @@ export default function KnowledgePage() {
                             <div className="flex items-center gap-1.5 mb-1">
                               {doc.type === 'url' ? (
                                 <Link2 className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                              ) : doc.type === 'feishu' ? (
+                                <FolderOpen className="h-3.5 w-3.5 text-blue-600 shrink-0" />
                               ) : (
                                 <FileText className="h-3.5 w-3.5 text-cyan-500 shrink-0" />
                               )}
@@ -532,6 +664,252 @@ export default function KnowledgePage() {
               </CardContent>
             </Card>
           )}
+        </div>
+      )}
+
+      {/* Feishu Tab */}
+      {activeTab === 'feishu' && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          {/* Feishu Browser */}
+          <div className="lg:col-span-2 space-y-4">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <FolderOpen className="h-5 w-5 text-blue-500" />
+                      飞书知识库
+                    </CardTitle>
+                    <CardDescription>
+                      浏览并导入飞书知识库中的文档
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={loadFeishuSpaces}
+                    disabled={isLoadingFeishu}
+                  >
+                    <RefreshCw className={`h-4 w-4 mr-1 ${isLoadingFeishu ? 'animate-spin' : ''}`} />
+                    刷新
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {feishuError && (
+                  <div className="flex items-center gap-2 rounded-lg p-3 text-sm bg-red-50 text-red-700 border border-red-200 mb-4">
+                    <AlertCircle className="h-4 w-4" />
+                    {feishuError}
+                  </div>
+                )}
+
+                {isLoadingFeishu && !feishuError && (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+                    <span className="ml-2 text-sm text-slate-500">加载中...</span>
+                  </div>
+                )}
+
+                {!isLoadingFeishu && !selectedSpace && feishuSpaces.length === 0 && !feishuError && (
+                  <div className="text-center py-12">
+                    <FolderOpen className="h-10 w-10 mx-auto text-slate-300 mb-3" />
+                    <p className="text-sm text-slate-500">未找到知识库空间</p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      请确保飞书应用已配置，且有知识库的访问权限
+                    </p>
+                  </div>
+                )}
+
+                {/* Space List */}
+                {!selectedSpace && feishuSpaces.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-slate-700 mb-3">选择知识库空间</p>
+                    {feishuSpaces.map((space) => (
+                      <button
+                        key={space.spaceId}
+                        onClick={() => {
+                          setSelectedSpace(space);
+                          loadFeishuNodes(space.spaceId);
+                        }}
+                        className="w-full flex items-center justify-between p-3 rounded-lg border border-slate-200 hover:border-blue-300 hover:bg-blue-50 transition-colors text-left"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                            <FolderOpen className="h-5 w-5 text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-slate-800">{space.name}</p>
+                            {space.description && (
+                              <p className="text-xs text-slate-500 line-clamp-1">{space.description}</p>
+                            )}
+                          </div>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-slate-400" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Node List */}
+                {selectedSpace && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 mb-3">
+                      <button
+                        onClick={() => {
+                          setSelectedSpace(null);
+                          setSelectedNode(null);
+                          setFeishuNodes([]);
+                        }}
+                        className="text-sm text-blue-600 hover:text-blue-700"
+                      >
+                        ← 返回空间列表
+                      </button>
+                      <span className="text-sm text-slate-500">/ {selectedSpace.name}</span>
+                    </div>
+
+                    {feishuNodes.length === 0 && !isLoadingFeishu && (
+                      <div className="text-center py-8">
+                        <FileText className="h-8 w-8 mx-auto text-slate-300 mb-2" />
+                        <p className="text-sm text-slate-500">此空间暂无文档</p>
+                      </div>
+                    )}
+
+                    {feishuNodes.map((node) => (
+                      <div
+                        key={node.nodeToken}
+                        className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                          selectedNode?.nodeToken === node.nodeToken
+                            ? 'border-blue-400 bg-blue-50'
+                            : 'border-slate-200 hover:border-blue-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <FileText className="h-5 w-5 text-slate-400 shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-slate-800 truncate">{node.title}</p>
+                            <p className="text-xs text-slate-500">{node.objType}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {node.hasChild && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => loadFeishuNodes(selectedSpace.spaceId, node.nodeToken)}
+                            >
+                              展开
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            onClick={() => setSelectedNode(node)}
+                            variant={selectedNode?.nodeToken === node.nodeToken ? 'default' : 'outline'}
+                          >
+                            {selectedNode?.nodeToken === node.nodeToken ? '已选择' : '选择'}
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Import Button */}
+            {selectedNode && (
+              <Card>
+                <CardContent className="pt-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-slate-700">已选择文档</p>
+                      <p className="text-sm text-slate-500">{selectedNode.title}</p>
+                    </div>
+                    <Button
+                      onClick={handleImportFeishu}
+                      disabled={isImportingFeishu}
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      {isImportingFeishu ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          导入中...
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="h-4 w-4 mr-2" />
+                          导入到知识库
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  {importResult && (
+                    <div className={`flex items-center gap-2 rounded-lg p-3 text-sm mt-4 ${
+                      importResult.success
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        : 'bg-red-50 text-red-700 border border-red-200'
+                    }`}>
+                      {importResult.success ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+                      {importResult.message}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">飞书配置</CardTitle>
+                <CardDescription>连接飞书知识库</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2 text-xs text-slate-500">
+                  <li className="flex items-start gap-1.5">
+                    <span className="text-blue-500 mt-0.5">1.</span>
+                    在「平台设置」中配置飞书应用凭证（App ID 和 App Secret）
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="text-blue-500 mt-0.5">2.</span>
+                    确保飞书应用已开启知识库相关权限
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="text-blue-500 mt-0.5">3.</span>
+                    将应用添加为知识库成员或管理员
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="text-blue-500 mt-0.5">4.</span>
+                    选择文档并导入到本地知识库
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-5">
+                <h4 className="text-sm font-medium text-slate-700 mb-2">支持的文档类型</h4>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <FileText className="h-3.5 w-3.5 text-blue-500" />
+                    <span>docx - 新版文档</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <FileText className="h-3.5 w-3.5 text-green-500" />
+                    <span>sheet - 电子表格</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <FileText className="h-3.5 w-3.5 text-purple-500" />
+                    <span>bitable - 多维表格</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <FileText className="h-3.5 w-3.5 text-orange-500" />
+                    <span>mindnote - 思维笔记</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       )}
     </div>
