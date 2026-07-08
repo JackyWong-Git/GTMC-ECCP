@@ -134,6 +134,7 @@ export async function GET(request: NextRequest) {
         topics = parsed.topics || [];
       }
     } catch {
+      // LLM 解析失败，使用兜底数据（热度为估算值）
       topics = response.web_items.slice(0, 15).map((item, i) => ({
         rank: i + 1,
         title: item.title,
@@ -143,6 +144,7 @@ export async function GET(request: NextRequest) {
         url: item.url || undefined,
         snippet: item.snippet?.substring(0, 50) || "",
         publishTime: item.publish_time || undefined,
+        estimated: true, // 标记热度为估算值
       }));
     }
 
@@ -495,6 +497,7 @@ ${pageText.substring(0, 8000)}
         topics = parsed.topics || [];
       }
     } catch {
+      // LLM 解析失败，使用兜底数据（热度为估算值）
       topics = response.web_items.slice(0, 15).map((item, i) => ({
         rank: i + 1,
         title: item.title,
@@ -504,6 +507,7 @@ ${pageText.substring(0, 8000)}
         url: item.url || undefined,
         snippet: item.snippet?.substring(0, 50) || "",
         publishTime: item.publish_time || undefined,
+        estimated: true, // 标记热度为估算值
       }));
     }
 
@@ -526,16 +530,4 @@ ${pageText.substring(0, 8000)}
       { status: 500 }
     );
   }
-}
-
-// 导出预设关键词供前端使用
-export async function GET_KEYWORDS() {
-  return NextResponse.json({
-    success: true,
-    data: {
-      automotive: AUTOMOTIVE_KEYWORDS,
-      weibo: WEIBO_AUTOMOTIVE_KEYWORDS,
-      crisis: CRISIS_KEYWORDS,
-    },
-  });
 }

@@ -18,7 +18,7 @@ import {
   BookOpen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const navItems = [
   { href: '/', label: '运营总览', icon: LayoutDashboard },
@@ -36,6 +36,14 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+
+  // 同步侧边栏宽度到 CSS 变量，供 layout 使用
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      '--sidebar-width',
+      collapsed ? '68px' : '240px'
+    );
+  }, [collapsed]);
 
   return (
     <aside

@@ -40,11 +40,17 @@ export async function GET() {
 
 /**
  * POST /api/config
- * 保存平台配置
+ * 保存平台配置（白名单校验，只允许写入已知字段）
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+
+    const currentConfig = getPlatformConfig();
+
+    // 白名单校验：只允许写入已知字段
+    const allowedDouyinFields = ['clientKey', 'clientSecret', 'redirectUri'];
+    const allowedLlmFields = ['apiKey', 'baseUrl'];
 
     const douyin = body.douyin ?? {
       clientKey: body.douyinClientKey,
@@ -56,17 +62,28 @@ export async function POST(request: NextRequest) {
       baseUrl: body.llmBaseUrl,
     };
 
-    const currentConfig = getPlatformConfig();
+    // 过滤只允许已知字段
+    const sanitizedDouyin = { ...currentConfig.douyin };
+    if (douyin && typeof douyin === 'object') {
+      for (const key of allowedDouyinFields) {
+        if (key in douyin && typeof douyin[key] === 'string') {
+          (sanitizedDouyin as Record<string, string>)[key] = douyin[key];
+        }
+      }
+    }
+
+    const sanitizedLlm = { ...currentConfig.llm };
+    if (llm && typeof llm === 'object') {
+      for (const key of allowedLlmFields) {
+        if (key in llm && typeof llm[key] === 'string') {
+          (sanitizedLlm as Record<string, string>)[key] = llm[key];
+        }
+      }
+    }
 
     const newConfig: PlatformConfig = {
-      douyin: {
-        ...currentConfig.douyin,
-        ...douyin,
-      },
-      llm: {
-        ...currentConfig.llm,
-        ...llm,
-      },
+      douyin: sanitizedDouyin,
+      llm: sanitizedLlm,
     };
 
     savePlatformConfig(newConfig);

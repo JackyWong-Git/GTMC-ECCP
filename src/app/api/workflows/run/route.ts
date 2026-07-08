@@ -74,7 +74,13 @@ export async function POST(request: NextRequest) {
         });
         runLog.status = "error";
         runLog.error = `模块「${mod.name}」执行失败：${errorMsg}`;
-        break;
+        
+        // 检查是否配置了 continueOnError，如果是则继续执行后续模块
+        const continueOnError = mod.config?.continueOnError === true;
+        if (!continueOnError) {
+          break;
+        }
+        // 继续执行时，保持上一次的 context 不变
       }
     }
 
@@ -84,7 +90,7 @@ export async function POST(request: NextRequest) {
     runLog.finishedAt = new Date().toISOString();
     runLog.moduleResults = moduleResults;
 
-    saveWorkflowLog(runLog);
+    await saveWorkflowLog(runLog);
 
     workflow.runCount += 1;
     if (runLog.status === "success") {
@@ -92,7 +98,7 @@ export async function POST(request: NextRequest) {
     }
     workflow.lastRunAt = new Date().toISOString();
     workflow.updatedAt = new Date().toISOString();
-    saveWorkflow(workflow);
+    await saveWorkflow(workflow);
 
     return NextResponse.json({
       success: true,

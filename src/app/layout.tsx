@@ -22,7 +22,7 @@ export default function RootLayout({
       <body className="antialiased">
         <div className="flex min-h-screen bg-[#F8FAFC]">
           <Sidebar />
-          <div className="flex flex-1 flex-col pl-[240px]">
+          <div className="flex flex-1 flex-col ml-[var(--sidebar-width,240px)] transition-[margin] duration-300">
             <Header />
             <main className="flex-1 p-6">{children}</main>
           </div>

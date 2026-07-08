@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
         status: status || existing.status,
         updatedAt: now,
       };
-      saveWorkflow(updated);
+      await saveWorkflow(updated);
       return NextResponse.json({ success: true, data: updated, message: "工作流已更新" });
     }
 
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
       runCount: 0,
       successCount: 0,
     };
-    saveWorkflow(newWorkflow);
+    await saveWorkflow(newWorkflow);
     return NextResponse.json({ success: true, data: newWorkflow, message: "工作流已创建" });
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : "未知错误";
@@ -115,7 +115,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: false, error: "工作流不存在" }, { status: 404 });
   }
 
-  deleteWorkflow(id);
+  await deleteWorkflow(id);
   return NextResponse.json({ success: true, message: "工作流已删除" });
 }
 

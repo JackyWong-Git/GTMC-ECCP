@@ -213,17 +213,18 @@ export async function POST(request: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          const response = await client.invoke(messages, {
+          const streamResponse = client.stream(messages, {
             model: MODEL_CONFIG.SCRIPT_GENERATION.model,
             temperature: 0.8,
           });
 
-          const content = response.content || '';
-          const chunks = content.match(/[\s\S]{1,20}/g) || [content];
-
-          for (const chunk of chunks) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: chunk })}\n\n`));
-            await new Promise((r) => setTimeout(r, 30));
+          for await (const chunk of streamResponse) {
+            if (chunk.content) {
+              const text = chunk.content.toString();
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ content: text })}\n\n`)
+              );
+            }
           }
 
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`));
@@ -241,6 +242,7 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
+        'Transfer-Encoding': 'chunked',
       },
     });
   } catch (error) {

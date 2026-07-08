@@ -92,6 +92,18 @@ function writeStore(data: { workflows: WorkflowDefinition[]; logs: WorkflowRunLo
   fs.writeFileSync(storePath, JSON.stringify(data, null, 2), "utf-8");
 }
 
+/**
+ * 简单的写锁，防止并发写入导致数据丢失
+ * 使用 Promise 队列确保写操作串行执行
+ */
+let writeLock: Promise<void> = Promise.resolve();
+
+function withWriteLock<T>(fn: () => T): Promise<T> {
+  const currentLock = writeLock.then(fn, fn);
+  writeLock = currentLock.then(() => {}, () => {});
+  return currentLock;
+}
+
 export function getWorkflows(): WorkflowDefinition[] {
   return readStore().workflows;
 }
@@ -100,21 +112,25 @@ export function getWorkflow(id: string): WorkflowDefinition | undefined {
   return readStore().workflows.find((w) => w.id === id);
 }
 
-export function saveWorkflow(workflow: WorkflowDefinition): void {
-  const store = readStore();
-  const idx = store.workflows.findIndex((w) => w.id === workflow.id);
-  if (idx >= 0) {
-    store.workflows[idx] = workflow;
-  } else {
-    store.workflows.push(workflow);
-  }
-  writeStore(store);
+export async function saveWorkflow(workflow: WorkflowDefinition): Promise<void> {
+  return withWriteLock(() => {
+    const store = readStore();
+    const idx = store.workflows.findIndex((w) => w.id === workflow.id);
+    if (idx >= 0) {
+      store.workflows[idx] = workflow;
+    } else {
+      store.workflows.push(workflow);
+    }
+    writeStore(store);
+  });
 }
 
-export function deleteWorkflow(id: string): void {
-  const store = readStore();
-  store.workflows = store.workflows.filter((w) => w.id !== id);
-  writeStore(store);
+export async function deleteWorkflow(id: string): Promise<void> {
+  return withWriteLock(() => {
+    const store = readStore();
+    store.workflows = store.workflows.filter((w) => w.id !== id);
+    writeStore(store);
+  });
 }
 
 export function getWorkflowLogs(workflowId?: string): WorkflowRunLog[] {
@@ -125,14 +141,16 @@ export function getWorkflowLogs(workflowId?: string): WorkflowRunLog[] {
   return store.logs;
 }
 
-export function saveWorkflowLog(log: WorkflowRunLog): void {
-  const store = readStore();
-  store.logs.unshift(log);
-  // 只保留最近 100 条日志
-  if (store.logs.length > 100) {
-    store.logs = store.logs.slice(0, 100);
-  }
-  writeStore(store);
+export async function saveWorkflowLog(log: WorkflowRunLog): Promise<void> {
+  return withWriteLock(() => {
+    const store = readStore();
+    store.logs.unshift(log);
+    // 只保留最近 100 条日志
+    if (store.logs.length > 100) {
+      store.logs = store.logs.slice(0, 100);
+    }
+    writeStore(store);
+  });
 }
 
 /** 生成唯一 ID */

@@ -78,6 +78,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // URL 格式校验
+    if (type === "url" && url) {
+      try {
+        const parsedUrl = new URL(url);
+        if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+          return NextResponse.json(
+            { error: "URL 必须是 http 或 https 协议" },
+            { status: 400 }
+          );
+        }
+      } catch {
+        return NextResponse.json(
+          { error: "URL 格式无效" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // 内容长度限制（最大 100KB）
+    const MAX_CONTENT_LENGTH = 100 * 1024;
+    if (content && content.length > MAX_CONTENT_LENGTH) {
+      return NextResponse.json(
+        { error: `内容过长，最大允许 ${MAX_CONTENT_LENGTH / 1024}KB，当前 ${(content.length / 1024).toFixed(1)}KB` },
+        { status: 400 }
+      );
+    }
+
     const config = new Config();
     const client = new KnowledgeClient(config);
 

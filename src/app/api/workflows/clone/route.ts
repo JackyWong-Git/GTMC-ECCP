@@ -56,7 +56,7 @@ export async function POST(request: Request) {
       successCount: 0,
     };
 
-    saveWorkflow(workflow);
+    await saveWorkflow(workflow);
 
     return NextResponse.json({
       success: true,
