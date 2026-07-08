@@ -10,9 +10,14 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [supabase] = useState(() => getSupabaseBrowserClient());
+  const [supabase, setSupabase] = useState<ReturnType<typeof getSupabaseBrowserClient> | null>(null);
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
+
+  // Initialize Supabase client only on client side
+  useEffect(() => {
+    setSupabase(getSupabaseBrowserClient());
+  }, []);
 
   // Login form state
   const [email, setEmail] = useState("");
@@ -27,6 +32,7 @@ export default function LoginPage() {
 
   // Check if already logged in
   useEffect(() => {
+    if (!supabase) return;
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
@@ -40,6 +46,7 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!supabase) return;
     setError("");
     setLoading(true);
 
@@ -63,6 +70,7 @@ export default function LoginPage() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!supabase) return;
     setError("");
 
     if (password !== confirmPassword) {
