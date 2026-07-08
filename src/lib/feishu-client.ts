@@ -18,6 +18,13 @@ interface TokenCache {
 let tokenCache: TokenCache | null = null;
 
 /**
+ * 清除 token 缓存（用于权限变更后强制重新获取）
+ */
+export function clearTokenCache(): void {
+  tokenCache = null;
+}
+
+/**
  * 获取 tenant_access_token
  */
 export async function getTenantAccessToken(config: FeishuConfig): Promise<string> {
