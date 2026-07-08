@@ -16,7 +16,12 @@ export default function LoginPage() {
 
   // Initialize Supabase client only on client side
   useEffect(() => {
-    setSupabase(getSupabaseBrowserClient());
+    try {
+      setSupabase(getSupabaseBrowserClient());
+    } catch (e) {
+      console.error("[login] Failed to initialize Supabase client:", e);
+      setCheckingSession(false);
+    }
   }, []);
 
   // Login form state

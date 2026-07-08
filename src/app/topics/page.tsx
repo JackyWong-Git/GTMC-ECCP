@@ -71,7 +71,12 @@ export default function TopicBoardPage() {
 
   // Initialize supabase client on client side only
   useEffect(() => {
-    setSupabase(getSupabaseBrowserClient());
+    try {
+      setSupabase(getSupabaseBrowserClient());
+    } catch (e) {
+      console.error("[topics] Failed to initialize Supabase client:", e);
+      setLoading(false);
+    }
   }, []);
 
   // Check auth and load data
