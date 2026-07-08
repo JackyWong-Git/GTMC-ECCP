@@ -1,7 +1,39 @@
 import { NextRequest } from 'next/server';
-import { LLMClient, Config, Message } from 'coze-coding-dev-sdk';
+import { LLMClient, Config, Message, KnowledgeClient, DataSourceType } from 'coze-coding-dev-sdk';
 import { MODEL_CONFIG } from '@/lib/llm-config';
 import { setupLLMEnv } from '@/lib/platform-config';
+
+/**
+ * 异步保存内容到知识库（不阻塞主流程）
+ */
+async function saveToKnowledge(
+  content: string,
+  metadata: { type: string; title: string; style?: string; keywords?: string[] }
+): Promise<void> {
+  try {
+    const config = new Config();
+    const knowledgeClient = new KnowledgeClient(config);
+    
+    // 构建带标签的内容
+    const taggedContent = [
+      `[${metadata.type}] ${metadata.title}`,
+      metadata.style ? `风格: ${metadata.style}` : '',
+      metadata.keywords?.length ? `关键词: ${metadata.keywords.join('、')}` : '',
+      `时间: ${new Date().toISOString().split('T')[0]}`,
+      '---',
+      content,
+    ].filter(Boolean).join('\n');
+
+    await knowledgeClient.addDocuments(
+      [{ source: DataSourceType.TEXT, raw_data: taggedContent }],
+      'coze_doc_knowledge'
+    );
+    console.log(`[knowledge] ${metadata.type}已保存: ${metadata.title}`);
+  } catch (error) {
+    // 静默失败，不影响主流程
+    console.error(`[knowledge] ${metadata.type}保存失败:`, error);
+  }
+}
 
 // 文章风格预设
 const ARTICLE_STYLES: Record<string, { name: string; systemPrompt: string }> = {
@@ -212,6 +244,7 @@ export async function POST(request: NextRequest) {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
+        let fullContent = '';
         try {
           const streamResponse = client.stream(messages, {
             model: MODEL_CONFIG.SCRIPT_GENERATION.model,
@@ -221,6 +254,7 @@ export async function POST(request: NextRequest) {
           for await (const chunk of streamResponse) {
             if (chunk.content) {
               const text = chunk.content.toString();
+              fullContent += text;
               controller.enqueue(
                 encoder.encode(`data: ${JSON.stringify({ content: text })}\n\n`)
               );
@@ -229,6 +263,16 @@ export async function POST(request: NextRequest) {
 
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`));
           controller.close();
+
+          // 流式输出结束后，异步保存到知识库（不阻塞响应）
+          if (fullContent.trim()) {
+            saveToKnowledge(fullContent, {
+              type: '公众号文章',
+              title: topic,
+              style: styleConfig.name,
+              keywords,
+            }).catch(() => {});
+          }
         } catch (error) {
           const errMsg = error instanceof Error ? error.message : '生成失败';
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: errMsg })}\n\n`));

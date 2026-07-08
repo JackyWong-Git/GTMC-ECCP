@@ -1,6 +1,38 @@
 import { NextRequest } from 'next/server';
-import { LLMClient, Config, HeaderUtils } from 'coze-coding-dev-sdk';
+import { LLMClient, Config, HeaderUtils, KnowledgeClient, DataSourceType } from 'coze-coding-dev-sdk';
 import { MODEL_CONFIG, SYSTEM_PROMPTS } from '@/lib/llm-config';
+
+/**
+ * 异步保存内容到知识库（不阻塞主流程）
+ */
+async function saveToKnowledge(
+  content: string,
+  metadata: { type: string; title: string; platform?: string; style?: string }
+): Promise<void> {
+  try {
+    const config = new Config();
+    const knowledgeClient = new KnowledgeClient(config);
+    
+    // 构建带标签的内容
+    const taggedContent = [
+      `[${metadata.type}] ${metadata.title}`,
+      metadata.platform ? `平台: ${metadata.platform}` : '',
+      metadata.style ? `风格: ${metadata.style}` : '',
+      `时间: ${new Date().toISOString().split('T')[0]}`,
+      '---',
+      content,
+    ].filter(Boolean).join('\n');
+
+    await knowledgeClient.addDocuments(
+      [{ source: DataSourceType.TEXT, raw_data: taggedContent }],
+      'coze_doc_knowledge'
+    );
+    console.log(`[knowledge] ${metadata.type}已保存: ${metadata.title}`);
+  } catch (error) {
+    // 静默失败，不影响主流程
+    console.error(`[knowledge] ${metadata.type}保存失败:`, error);
+  }
+}
 
 /**
  * POST /api/generate-script
@@ -53,10 +85,12 @@ ${duration ? `视频时长：${duration}` : '视频时长：3-5分钟'}
     const encoder = new TextEncoder();
     const readableStream = new ReadableStream({
       async start(controller) {
+        let fullContent = '';
         try {
           for await (const chunk of stream) {
             if (chunk.content) {
               const text = chunk.content.toString();
+              fullContent += text;
               controller.enqueue(
                 encoder.encode(`data: ${JSON.stringify({ content: text })}\n\n`)
               );
@@ -72,6 +106,16 @@ ${duration ? `视频时长：${duration}` : '视频时长：3-5分钟'}
             )
           );
           controller.close();
+
+          // 流式输出结束后，异步保存到知识库（不阻塞响应）
+          if (fullContent.trim()) {
+            saveToKnowledge(fullContent, {
+              type: '视频脚本',
+              title: topicTitle,
+              platform,
+              style,
+            }).catch(() => {});
+          }
         } catch (streamError) {
           console.error('[generate-script] 流式输出错误:', streamError);
           controller.enqueue(

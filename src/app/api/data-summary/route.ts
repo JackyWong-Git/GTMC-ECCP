@@ -1,6 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { LLMClient, Config, HeaderUtils } from 'coze-coding-dev-sdk';
+import { LLMClient, Config, HeaderUtils, KnowledgeClient, DataSourceType } from 'coze-coding-dev-sdk';
 import { MODEL_CONFIG, SYSTEM_PROMPTS } from '@/lib/llm-config';
+
+/**
+ * 异步保存内容到知识库（不阻塞主流程）
+ */
+async function saveToKnowledge(
+  content: string,
+  metadata: { type: string; title: string; platform?: string; period?: string }
+): Promise<void> {
+  try {
+    const config = new Config();
+    const knowledgeClient = new KnowledgeClient(config);
+    
+    // 构建带标签的内容
+    const taggedContent = [
+      `[${metadata.type}] ${metadata.title}`,
+      metadata.platform ? `平台: ${metadata.platform}` : '',
+      metadata.period ? `周期: ${metadata.period}` : '',
+      `时间: ${new Date().toISOString().split('T')[0]}`,
+      '---',
+      content,
+    ].filter(Boolean).join('\n');
+
+    await knowledgeClient.addDocuments(
+      [{ source: DataSourceType.TEXT, raw_data: taggedContent }],
+      'coze_doc_knowledge'
+    );
+    console.log(`[knowledge] ${metadata.type}已保存: ${metadata.title}`);
+  } catch (error) {
+    // 静默失败，不影响主流程
+    console.error(`[knowledge] ${metadata.type}保存失败:`, error);
+  }
+}
 
 /**
  * POST /api/data-summary
@@ -89,6 +121,16 @@ ${topVideosText}
       model: MODEL_CONFIG.DATA_SUMMARY.model,
       temperature: MODEL_CONFIG.DATA_SUMMARY.temperature,
     });
+
+    // 异步保存到知识库（不阻塞响应）
+    if (response.content) {
+      saveToKnowledge(response.content, {
+        type: '数据报告',
+        title: `${platform} ${period} 数据摘要`,
+        platform,
+        period,
+      }).catch(() => {});
+    }
 
     return NextResponse.json({
       success: true,
