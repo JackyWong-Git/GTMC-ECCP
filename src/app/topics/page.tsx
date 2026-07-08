@@ -57,7 +57,7 @@ interface User {
 
 export default function TopicBoardPage() {
   const router = useRouter();
-  const [supabase] = useState(() => getSupabaseBrowserClient());
+  const [supabase, setSupabase] = useState<ReturnType<typeof getSupabaseBrowserClient> | null>(null);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -69,8 +69,15 @@ export default function TopicBoardPage() {
   const [newPriority, setNewPriority] = useState("中");
   const [newDeadline, setNewDeadline] = useState("");
 
+  // Initialize supabase client on client side only
+  useEffect(() => {
+    setSupabase(getSupabaseBrowserClient());
+  }, []);
+
   // Check auth and load data
   useEffect(() => {
+    if (!supabase) return;
+    
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
@@ -182,7 +189,9 @@ export default function TopicBoardPage() {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
     router.push("/login");
   };
 
