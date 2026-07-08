@@ -44,6 +44,8 @@ export const topics = pgTable(
     progress: integer("progress").notNull().default(0), // 0-100
     tags: jsonb("tags"), // 标签数组
     attachments: jsonb("attachments"), // 附件列表
+    source: varchar("source", { length: 100 }), // 来源（如：抖音、微博、手动创建）
+    source_url: text("source_url"), // 来源链接
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -53,6 +55,7 @@ export const topics = pgTable(
     index("topics_created_by_idx").on(table.created_by),
     index("topics_priority_idx").on(table.priority),
     index("topics_created_at_idx").on(table.created_at),
+    index("topics_source_idx").on(table.source),
   ]
 );
 

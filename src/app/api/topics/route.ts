@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { title, description, priority, deadline } = body;
+    const { title, description, priority, deadline, source, sourceUrl } = body;
 
     if (!title) {
       return NextResponse.json({ error: "Title is required" }, { status: 400 });
@@ -83,6 +83,8 @@ export async function POST(request: NextRequest) {
       priority: priority || "中",
       deadline: deadline || null,
       progress: 0,
+      source: source || "手动创建",
+      source_url: sourceUrl || null,
       created_at: now,
       updated_at: now,
     }).returning();
