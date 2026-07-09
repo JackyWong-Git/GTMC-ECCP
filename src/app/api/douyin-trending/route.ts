@@ -413,7 +413,7 @@ ${pageText.substring(0, 8000)}
       });
     }
 
-    // 构建搜索查询
+    // 构建搜索查询 - 增强版：多源并行搜索
     let searchQuery = query || "";
     if (keywords && keywords.length > 0) {
       searchQuery = keywords.join(" ");
@@ -421,23 +421,52 @@ ${pageText.substring(0, 8000)}
       searchQuery = "抖音热榜 今日热门话题";
     }
 
-    // 使用 advancedSearch 支持更多过滤选项
     const searchClient = new SearchClient(config, customHeaders);
-    const response = await searchClient.advancedSearch(searchQuery, {
-      searchType: "web",
-      count,
-      timeRange,
-      sites,
-      needSummary: true,
-      needContent: false,
-      needUrl: true,
-    });
+    
+    // 多源并行搜索：主查询 + 扩展查询
+    const expandedQueries = [
+      searchQuery,
+      `${searchQuery} 热门 趋势`,
+      `${searchQuery} 最新 热点`,
+    ];
+    
+    // 并行执行多个搜索
+    const searchPromises = expandedQueries.map((q, idx) => 
+      searchClient.advancedSearch(q, {
+        searchType: "web",
+        count: Math.min(count, 15),
+        timeRange: idx === 0 ? timeRange : "3d", // 扩展查询用更短的时间范围
+        needSummary: idx === 0, // 只对主查询请求摘要
+        needContent: false,
+        needUrl: true,
+      }).catch(() => ({ web_items: [], summary: "" }))
+    );
+    
+    const searchResults = await Promise.all(searchPromises);
+    
+    // 合并去重搜索结果
+    const seenUrls = new Set<string>();
+    const allItems: Array<{ url?: string; title?: string; snippet?: string; site_name?: string; publish_time?: string }> = [];
+    for (const result of searchResults) {
+      if (result.web_items) {
+        for (const item of result.web_items) {
+          const key = item.url || item.title;
+          if (!seenUrls.has(key)) {
+            seenUrls.add(key);
+            allItems.push(item);
+          }
+        }
+      }
+    }
+    
+    const mainSummary = searchResults[0]?.summary || "";
 
-    if (!response.web_items || response.web_items.length === 0) {
+    if (allItems.length === 0) {
       return NextResponse.json({
         success: true,
         data: {
           topics: [],
+          relatedKeywords: [],
           summary: "暂无搜索结果",
           fetchedAt: new Date().toISOString(),
           query: searchQuery,
@@ -449,74 +478,100 @@ ${pageText.substring(0, 8000)}
 
     const llmClient = new LLMClient(config, customHeaders);
 
-    const searchResultsText = response.web_items
+    const searchResultsText = allItems
+      .slice(0, 25) // 限制输入长度
       .map((item, i) => `${i + 1}. ${item.title}\n   来源: ${item.site_name || "未知"}\n   摘要: ${item.snippet}\n   URL: ${item.url || "无"}`)
       .join("\n\n");
 
-    const categoryHint = source === "automotive" ? "汽车/新能源/智能驾驶/车企/销量" :
-      source === "weibo" ? "微博热搜/汽车话题/新车/车展" :
-      source === "crisis" ? "危机/裁员/召回/供应链/补贴" :
-      "社会/娱乐/科技/生活/教育/健康/财经/体育/汽车";
+    const categoryHint = source === "automotive" ? "汽车/新能源/智能驾驶/车企/销量/充电桩/二手车" :
+      source === "weibo" ? "微博热搜/汽车话题/新车/车展/明星/娱乐" :
+      source === "crisis" ? "危机/裁员/召回/供应链/补贴/质量问题/投诉" :
+      "社会/娱乐/科技/生活/教育/健康/财经/体育/汽车/美食/旅游";
 
     const llmResponse = await llmClient.invoke([
       {
         role: "system",
-        content: `你是一个热点内容分析师。根据搜索结果，提取并整理热门话题。
-重点关注以下分类：${categoryHint}
+        content: `你是一个专业的热点内容分析师，擅长从搜索结果中提取有价值的选题方向。
+
+分析要求：
+1. 提取最具传播潜力的话题，按热度排序
+2. 为每个话题标注内容类型（视频/图文/新闻/深度分析）
+3. 识别话题的趋势方向（上升/稳定/下降）
+4. 提取 3-5 个相关关键词供进一步搜索
+5. 重点关注：${categoryHint}
+
 请严格按照以下 JSON 格式输出，不要输出其他内容：
 {
   "topics": [
     {
       "rank": 序号(数字),
-      "title": "话题标题",
-      "heatScore": 热度分数(1000-10000之间的整数),
-      "category": "分类(汽车/新能源/智能驾驶/车企/销量/危机/综合)",
-      "source": "来源平台(抖音/微博/视频号/快手/综合)",
+      "title": "话题标题（简洁有力，15字以内）",
+      "heatScore": 热度分数(1000-10000之间的整数，基于传播潜力评估),
+      "category": "分类",
+      "contentType": "内容类型(视频/图文/新闻/深度分析)",
+      "trend": "趋势方向(上升/稳定/下降)",
+      "source": "来源平台",
       "url": "相关链接(如有)",
-      "snippet": "简短描述(50字以内)"
+      "snippet": "简短描述(50字以内，突出核心看点)",
+      "angle": "推荐切入角度(30字以内)"
     }
-  ]
+  ],
+  "relatedKeywords": ["相关关键词1", "相关关键词2", "相关关键词3"]
 }
-最多提取15个热点话题，按热度从高到低排序。`,
+最多提取20个热点话题，按热度从高到低排序。`,
       },
       {
         role: "user",
-        content: `以下是搜索到的热点内容，请分析并结构化输出：\n\n${searchResultsText}\n\nAI摘要：${response.summary || "无"}`,
+        content: `以下是搜索到的热点内容（共${allItems.length}条），请分析并结构化输出：\n\n${searchResultsText}\n\nAI摘要：${mainSummary || "无"}`,
       },
     ], {
       model: MODEL_CONFIG.HOT_TOPIC_ANALYSIS.model,
       temperature: MODEL_CONFIG.HOT_TOPIC_ANALYSIS.temperature,
     });
 
-    let topics: TrendingTopic[] = [];
+    interface EnhancedTopic extends TrendingTopic {
+      contentType?: string;
+      trend?: string;
+      angle?: string;
+    }
+    
+    let topics: EnhancedTopic[] = [];
+    let relatedKeywords: string[] = [];
+    
     try {
       const content = llmResponse.content || "";
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]) as { topics: TrendingTopic[] };
+        const parsed = JSON.parse(jsonMatch[0]) as { topics: EnhancedTopic[]; relatedKeywords?: string[] };
         topics = parsed.topics || [];
+        relatedKeywords = parsed.relatedKeywords || [];
       }
     } catch {
-      // LLM 解析失败，使用兜底数据（热度为估算值）
-      topics = response.web_items.slice(0, 15).map((item, i) => ({
+      // LLM 解析失败，使用兜底数据
+      topics = allItems.slice(0, 20).map((item, i) => ({
         rank: i + 1,
-        title: item.title,
-        heatScore: Math.floor(9000 - i * 400 + Math.random() * 200),
+        title: item.title || "未知标题",
+        heatScore: Math.floor(9500 - i * 350 + Math.random() * 200),
         category: "综合",
+        contentType: "图文",
+        trend: "稳定",
         source: source === "weibo" ? "微博" : source === "automotive" ? "汽车行业" : "综合",
-        url: item.url || undefined,
+        url: item.url || "",
         snippet: item.snippet?.substring(0, 50) || "",
         publishTime: item.publish_time || undefined,
-        estimated: true, // 标记热度为估算值
+        angle: "深度解读",
+        estimated: true,
       }));
+      relatedKeywords = [searchQuery, `${searchQuery} 最新`, `${searchQuery} 热门`];
     }
 
     return NextResponse.json({
       success: true,
       data: {
         topics,
-        summary: response.summary || "",
-        totalResults: response.web_items.length,
+        relatedKeywords,
+        summary: mainSummary,
+        totalResults: allItems.length,
         fetchedAt: new Date().toISOString(),
         query: searchQuery,
         source: source || "custom",

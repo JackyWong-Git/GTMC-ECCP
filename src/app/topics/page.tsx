@@ -71,6 +71,9 @@ interface ExternalTopic {
   url: string;
   heatScore?: number;
   category?: string;
+  contentType?: string;
+  trend?: string;
+  angle?: string;
 }
 
 interface UserInfo {
@@ -98,6 +101,7 @@ export default function TopicBoardPage() {
   // External topics state
   const [searchQuery, setSearchQuery] = useState("");
   const [externalTopics, setExternalTopics] = useState<ExternalTopic[]>([]);
+  const [relatedKeywords, setRelatedKeywords] = useState<string[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
 
@@ -233,6 +237,7 @@ export default function TopicBoardPage() {
     setIsSearching(true);
     setSearchError("");
     setExternalTopics([]);
+    setRelatedKeywords([]);
 
     try {
       const controller = new AbortController();
@@ -258,6 +263,7 @@ export default function TopicBoardPage() {
       const data = await res.json();
       if (data.success && data.data?.topics) {
         setExternalTopics(data.data.topics);
+        setRelatedKeywords(data.data.relatedKeywords || []);
       } else {
         setSearchError("未找到相关选题");
       }
@@ -556,7 +562,7 @@ export default function TopicBoardPage() {
               )}
 
               {externalTopics.length > 0 && (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h2 className="text-lg font-semibold flex items-center gap-2">
                       <TrendingUp className="w-5 h-5 text-blue-600" />
@@ -564,6 +570,27 @@ export default function TopicBoardPage() {
                     </h2>
                     <Badge variant="outline">{externalTopics.length} 条</Badge>
                   </div>
+
+                  {/* Related Keywords */}
+                  {relatedKeywords.length > 0 && (
+                    <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
+                      <p className="text-xs font-medium text-blue-700 mb-2">相关关键词</p>
+                      <div className="flex flex-wrap gap-2">
+                        {relatedKeywords.map((keyword, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => {
+                              setSearchQuery(keyword);
+                              handleExternalSearch(keyword);
+                            }}
+                            className="px-2 py-1 bg-white border border-blue-200 rounded text-xs text-blue-600 hover:bg-blue-100 transition-colors"
+                          >
+                            {keyword}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {externalTopics.map((topic, idx) => (
                     <Card key={idx} className="hover:shadow-md transition-shadow">
@@ -579,6 +606,31 @@ export default function TopicBoardPage() {
                             <p className="text-xs text-gray-500 line-clamp-2 mb-2">
                               {topic.snippet}
                             </p>
+                            {/* Content Type & Trend */}
+                            <div className="flex flex-wrap items-center gap-2 mb-2">
+                              {topic.contentType && (
+                                <Badge variant="secondary" className="text-xs">
+                                  {topic.contentType}
+                                </Badge>
+                              )}
+                              {topic.trend && (
+                                <Badge 
+                                  variant="outline" 
+                                  className={`text-xs ${
+                                    topic.trend === "上升" ? "text-green-600 border-green-200" :
+                                    topic.trend === "下降" ? "text-red-600 border-red-200" :
+                                    "text-gray-600"
+                                  }`}
+                                >
+                                  {topic.trend === "上升" ? "↑" : topic.trend === "下降" ? "↓" : "→"} {topic.trend}
+                                </Badge>
+                              )}
+                              {topic.angle && (
+                                <Badge variant="outline" className="text-xs text-purple-600 border-purple-200">
+                                  {topic.angle}
+                                </Badge>
+                              )}
+                            </div>
                             <div className="flex items-center gap-3 text-xs text-gray-400">
                               <span>{topic.source}</span>
                               {topic.heatScore && (
