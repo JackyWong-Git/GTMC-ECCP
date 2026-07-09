@@ -99,6 +99,57 @@ export default function KnowledgePage() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchTotal, setSearchTotal] = useState(0);
 
+  // Recent imports state (stored in localStorage)
+  const [recentImports, setRecentImports] = useState<Array<{ title: string; type: string; time: string }>>([]);
+
+  // Load recent imports from localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem('eccp_recent_imports');
+    if (stored) {
+      try {
+        setRecentImports(JSON.parse(stored));
+      } catch {
+        setRecentImports([]);
+      }
+    }
+  }, []);
+
+  // Add to recent imports
+  const addToRecentImports = (title: string, type: string) => {
+    const newImport = { title, type, time: new Date().toISOString() };
+    const updated = [newImport, ...recentImports].slice(0, 10); // Keep only 10 most recent
+    setRecentImports(updated);
+    localStorage.setItem('eccp_recent_imports', JSON.stringify(updated));
+  };
+
+  // Create topic from search result
+  const handleCreateTopicFromSearch = async (content: string) => {
+    try {
+      // Extract first 50 chars as title
+      const title = content.slice(0, 50) + (content.length > 50 ? '...' : '');
+      
+      const response = await fetch('/api/topics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          description: content.slice(0, 500),
+          status: 'pending',
+          source: 'knowledge_search',
+        }),
+      });
+
+      if (response.ok) {
+        alert('选题已创建，可在选题池中查看');
+      } else {
+        alert('创建选题失败');
+      }
+    } catch (error) {
+      console.error('Failed to create topic:', error);
+      alert('创建选题失败');
+    }
+  };
+
   // Feishu state
   const [feishuSpaces, setFeishuSpaces] = useState<FeishuSpace[]>([]);
   const [feishuNodes, setFeishuNodes] = useState<FeishuNode[]>([]);
@@ -724,6 +775,37 @@ export default function KnowledgePage() {
                       </Button>
                     </CardContent>
                   </Card>
+
+                  {/* 最近导入列表 */}
+                  {recentImports.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <Clock className="w-4 h-4" />
+                          最近导入
+                        </CardTitle>
+                        <CardDescription>最近导入到知识库的文档</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2">
+                          {recentImports.map((item, i) => (
+                            <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                              <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <FileText className="w-4 h-4 text-gray-400 shrink-0" />
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-medium truncate">{item.title}</p>
+                                  <p className="text-xs text-gray-500">{item.time}</p>
+                                </div>
+                              </div>
+                              <Badge variant="outline" className="text-xs shrink-0 ml-2">
+                                {item.type}
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
               )}
 
@@ -759,7 +841,18 @@ export default function KnowledgePage() {
                                 <Badge variant="outline" className="text-xs">
                                   相似度: {(result.score * 100).toFixed(1)}%
                                 </Badge>
-                                <span className="text-xs text-gray-400">{result.docId.slice(0, 8)}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-gray-400">{result.docId.slice(0, 8)}</span>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleCreateTopicFromSearch(result.content)}
+                                    className="text-xs text-blue-600 hover:text-blue-700"
+                                  >
+                                    <Plus className="w-3 h-3 mr-1" />
+                                    创建选题
+                                  </Button>
+                                </div>
                               </div>
                               <p className="text-sm text-gray-700 line-clamp-3">{result.content}</p>
                             </div>

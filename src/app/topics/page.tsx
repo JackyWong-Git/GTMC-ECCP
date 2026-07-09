@@ -22,6 +22,7 @@ import {
   TrendingUp,
   Flame,
   Sparkles,
+  FileText,
 } from "lucide-react";
 
 // Topic status flow
@@ -322,6 +323,64 @@ export default function TopicBoardPage() {
     }
   };
 
+  // Save external topic to knowledge base
+  const handleSaveToKnowledge = async (topic: ExternalTopic) => {
+    try {
+      const res = await fetch("/api/knowledge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: topic.title,
+          content: topic.snippet || topic.title,
+          source: topic.source,
+          sourceUrl: topic.url,
+          tags: ["热榜", topic.category || "未分类"],
+        }),
+      });
+
+      if (res.ok) {
+        alert("已存入知识库");
+      } else {
+        const err = await res.json();
+        alert(`保存失败: ${err.error || "未知错误"}`);
+      }
+    } catch (err) {
+      console.error("Failed to save to knowledge:", err);
+      alert("保存失败，请重试");
+    }
+  };
+
+  // Save internal topic to knowledge base
+  const handleSaveTopicToKnowledge = async (topic: InternalTopic) => {
+    try {
+      const res = await fetch("/api/knowledge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: topic.title,
+          content: topic.description || topic.title,
+          source: "选题池",
+          tags: ["选题", topic.priority || "中"],
+        }),
+      });
+
+      if (res.ok) {
+        alert("已存入知识库");
+      } else {
+        const err = await res.json();
+        alert(`保存失败: ${err.error || "未知错误"}`);
+      }
+    } catch (err) {
+      console.error("Failed to save to knowledge:", err);
+      alert("保存失败，请重试");
+    }
+  };
+
+  // Navigate to script workshop with topic
+  const handleGenerateScript = (topic: InternalTopic) => {
+    router.push(`/scripts?topic=${encodeURIComponent(topic.title)}`);
+  };
+
   const handleLogout = async () => {
     if (supabase) {
       await supabase.auth.signOut();
@@ -462,12 +521,11 @@ export default function TopicBoardPage() {
                               </div>
                             </div>
                           )}
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             {topic.status === "待认领" && (
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="w-full"
                                 onClick={() => handleClaimTopic(topic.id)}
                               >
                                 认领
@@ -479,13 +537,28 @@ export default function TopicBoardPage() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="w-full"
                                   onClick={() => handleAdvanceStatus(topic.id, topic.status)}
                                 >
                                   推进
                                   <ArrowRight className="w-3 h-3 ml-1" />
                                 </Button>
                               )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleGenerateScript(topic)}
+                            >
+                              <FileText className="w-3 h-3 mr-1" />
+                              生成脚本
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleSaveTopicToKnowledge(topic)}
+                            >
+                              <Database className="w-3 h-3 mr-1" />
+                              知识库
+                            </Button>
                           </div>
                         </CardContent>
                       </Card>
@@ -659,6 +732,14 @@ export default function TopicBoardPage() {
                               onClick={() => window.open(topic.url, "_blank")}
                             >
                               查看原文
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleSaveToKnowledge(topic)}
+                            >
+                              <Database className="w-3 h-3 mr-1" />
+                              存知识库
                             </Button>
                             <Button
                               size="sm"
