@@ -124,6 +124,30 @@ export default function KnowledgePage() {
   const [dingtalkError, setDingtalkError] = useState('');
   const [isImportingDingtalk, setIsImportingDingtalk] = useState(false);
 
+  // Configuration status state
+  const [configStatus, setConfigStatus] = useState<{
+    feishu: boolean;
+    dify: boolean;
+    dingtalk: boolean;
+  }>({ feishu: false, dify: false, dingtalk: false });
+
+  // Check configuration status
+  const checkConfigStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/config');
+      const data = await res.json();
+      if (data.success) {
+        setConfigStatus({
+          feishu: data.data.feishu?.isConfigured || false,
+          dify: data.data.dify?.isConfigured || false,
+          dingtalk: data.data.dingtalk?.isConfigured || false,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to check config status:', error);
+    }
+  }, []);
+
   // Load local documents
   const loadDocuments = useCallback(async () => {
     setIsLoadingDocs(true);
@@ -141,10 +165,11 @@ export default function KnowledgePage() {
   }, []);
 
   useEffect(() => {
+    checkConfigStatus();
     if (activeSource === 'local') {
       loadDocuments();
     }
-  }, [activeSource, loadDocuments]);
+  }, [activeSource, loadDocuments, checkConfigStatus]);
 
   // Import document
   const handleImport = async () => {
@@ -751,6 +776,31 @@ export default function KnowledgePage() {
           {/* Feishu Knowledge Base */}
           {activeSource === 'feishu' && (
             <div className="space-y-4">
+              {/* Configuration Guide */}
+              {!configStatus.feishu && (
+                <Card className="border-amber-200 bg-amber-50">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2 text-amber-800">
+                      <Settings className="w-4 h-4" />
+                      配置飞书知识库
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-amber-700 space-y-2">
+                    <p>要使用飞书知识库功能，请先在设置页面配置飞书应用凭证：</p>
+                    <ol className="list-decimal list-inside space-y-1 ml-2">
+                      <li>前往 <a href="https://open.feishu.cn/app" target="_blank" rel="noopener noreferrer" className="underline">飞书开放平台</a> 创建应用</li>
+                      <li>获取 App ID 和 App Secret</li>
+                      <li>开通权限：<code className="bg-amber-100 px-1 rounded">wiki:wiki:readonly</code> 和 <code className="bg-amber-100 px-1 rounded">docx:document:readonly</code></li>
+                      <li>发布应用版本</li>
+                      <li>在 ECCP 设置页面填入飞书凭证并保存</li>
+                    </ol>
+                    <Button variant="outline" size="sm" className="mt-3" onClick={() => window.location.href = '/settings'}>
+                      前往设置
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
               {isLoadingFeishu ? (
                 <div className="flex items-center justify-center py-20">
                   <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
@@ -864,6 +914,35 @@ export default function KnowledgePage() {
           {/* Dify Knowledge Base */}
           {activeSource === 'dify' && (
             <div className="space-y-4">
+              {/* Configuration Guide */}
+              {!configStatus.dify && (
+                <Card className="border-amber-200 bg-amber-50">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2 text-amber-800">
+                      <Settings className="w-4 h-4" />
+                      配置 Dify 知识库
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-amber-700 space-y-2">
+                    <p>要使用 Dify 知识库功能，请先在设置页面配置 Dify API 凭证：</p>
+                    <ol className="list-decimal list-inside space-y-1 ml-2">
+                      <li>登录 <a href="https://cloud.dify.ai" target="_blank" rel="noopener noreferrer" className="underline">Dify Cloud</a> 或你的自部署 Dify 实例</li>
+                      <li>进入「设置」→「API 密钥」</li>
+                      <li>创建 Dataset API Key（格式：<code className="bg-amber-100 px-1 rounded">dataset-xxxx</code>）</li>
+                      <li>在 ECCP 设置页面填入：
+                        <ul className="list-disc list-inside ml-4 mt-1 text-xs">
+                          <li>API Key：你的 Dataset API Key</li>
+                          <li>Base URL：<code className="bg-amber-100 px-1 rounded">https://api.dify.ai/v1</code>（Cloud）或你的自部署地址</li>
+                        </ul>
+                      </li>
+                    </ol>
+                    <Button variant="outline" size="sm" className="mt-3" onClick={() => window.location.href = '/settings'}>
+                      前往设置
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
               {isLoadingDify ? (
                 <div className="flex items-center justify-center py-20">
                   <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
@@ -975,6 +1054,37 @@ export default function KnowledgePage() {
           {/* DingTalk Knowledge Base */}
           {activeSource === 'dingtalk' && (
             <div className="space-y-4">
+              {/* Configuration Guide */}
+              {!configStatus.dingtalk && (
+                <Card className="border-amber-200 bg-amber-50">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2 text-amber-800">
+                      <Settings className="w-4 h-4" />
+                      配置钉钉知识库
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-amber-700 space-y-2">
+                    <p>要使用钉钉知识库功能，请先在设置页面配置钉钉应用凭证：</p>
+                    <ol className="list-decimal list-inside space-y-1 ml-2">
+                      <li>前往 <a href="https://open-dev.dingtalk.com/" target="_blank" rel="noopener noreferrer" className="underline">钉钉开放平台</a> 创建企业内部应用</li>
+                      <li>获取 App Key 和 App Secret</li>
+                      <li>开通权限：
+                        <ul className="list-disc list-inside ml-4 mt-1 text-xs">
+                          <li><code className="bg-amber-100 px-1 rounded">Wiki::workspace::read</code> - 查看知识库</li>
+                          <li><code className="bg-amber-100 px-1 rounded">Wiki::node::read</code> - 查看知识库节点</li>
+                          <li><code className="bg-amber-100 px-1 rounded">Contact::User::readonly</code> - 获取用户信息</li>
+                        </ul>
+                      </li>
+                      <li>获取操作者的 Union ID（可通过钉钉管理后台或 API 获取）</li>
+                      <li>在 ECCP 设置页面填入钉钉凭证并保存</li>
+                    </ol>
+                    <Button variant="outline" size="sm" className="mt-3" onClick={() => window.location.href = '/settings'}>
+                      前往设置
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
               {isLoadingDingtalk ? (
                 <div className="flex items-center justify-center py-20">
                   <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
