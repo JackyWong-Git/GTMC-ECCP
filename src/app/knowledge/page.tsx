@@ -19,6 +19,16 @@ import {
   FolderOpen,
   ChevronRight,
   RefreshCw,
+  Database,
+  MessageSquare,
+  Settings,
+  ExternalLink,
+  Copy,
+  Eye,
+  Download,
+  Filter,
+  MoreHorizontal,
+  X,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -31,6 +41,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 
+// Types
 interface SearchResult {
   content: string;
   score: number;
@@ -61,8 +72,19 @@ interface FeishuNode {
   parentNodeToken?: string;
 }
 
+type KnowledgeSource = 'local' | 'feishu' | 'dify' | 'dingtalk';
+type LocalView = 'documents' | 'import' | 'search';
+
 export default function KnowledgePage() {
-  const [activeTab, setActiveTab] = useState<'import' | 'search' | 'feishu' | 'dify' | 'dingtalk'>('import');
+  // Navigation state
+  const [activeSource, setActiveSource] = useState<KnowledgeSource>('local');
+  const [localView, setLocalView] = useState<LocalView>('documents');
+
+  // Local knowledge base state
+  const [documents, setDocuments] = useState<DocRecord[]>([]);
+  const [isLoadingDocs, setIsLoadingDocs] = useState(false);
+
+  // Import state
   const [importType, setImportType] = useState<'text' | 'url'>('text');
   const [importTitle, setImportTitle] = useState('');
   const [importContent, setImportContent] = useState('');
@@ -71,6 +93,7 @@ export default function KnowledgePage() {
   const [isImporting, setIsImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ success: boolean; message: string } | null>(null);
 
+  // Search state
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -89,7 +112,6 @@ export default function KnowledgePage() {
   const [difyDatasets, setDifyDatasets] = useState<Array<{ id: string; name: string; document_count: number }>>([]);
   const [difyDocuments, setDifyDocuments] = useState<Array<{ id: string; name: string; word_count: number }>>([]);
   const [selectedDifyDataset, setSelectedDifyDataset] = useState<{ id: string; name: string } | null>(null);
-  const [selectedDifyDocument, setSelectedDifyDocument] = useState<{ id: string; name: string } | null>(null);
   const [isLoadingDify, setIsLoadingDify] = useState(false);
   const [difyError, setDifyError] = useState('');
   const [isImportingDify, setIsImportingDify] = useState(false);
@@ -98,28 +120,99 @@ export default function KnowledgePage() {
   const [dingtalkWorkspaces, setDingtalkWorkspaces] = useState<Array<{ workspaceId: string; name: string; docCount: number }>>([]);
   const [dingtalkNodes, setDingtalkNodes] = useState<Array<{ nodeId: string; name: string; nodeType: string; docKey?: string }>>([]);
   const [selectedDingtalkWorkspace, setSelectedDingtalkWorkspace] = useState<{ workspaceId: string; name: string } | null>(null);
-  const [selectedDingtalkNode, setSelectedDingtalkNode] = useState<{ nodeId: string; name: string; docKey?: string } | null>(null);
   const [isLoadingDingtalk, setIsLoadingDingtalk] = useState(false);
   const [dingtalkError, setDingtalkError] = useState('');
   const [isImportingDingtalk, setIsImportingDingtalk] = useState(false);
 
-  // 本地文档记录（用于展示历史导入）
-  const [docRecords, setDocRecords] = useState<DocRecord[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('knowledge-docs');
-        return saved ? JSON.parse(saved) : [];
-      } catch {
-        return [];
+  // Load local documents
+  const loadDocuments = useCallback(async () => {
+    setIsLoadingDocs(true);
+    try {
+      const res = await fetch('/api/knowledge?action=list');
+      const data = await res.json();
+      if (data.success) {
+        setDocuments(data.data || []);
       }
+    } catch (error) {
+      console.error('Failed to load documents:', error);
+    } finally {
+      setIsLoadingDocs(false);
     }
-    return [];
-  });
-
-  const saveDocRecords = useCallback((records: DocRecord[]) => {
-    setDocRecords(records);
-    localStorage.setItem('knowledge-docs', JSON.stringify(records));
   }, []);
+
+  useEffect(() => {
+    if (activeSource === 'local') {
+      loadDocuments();
+    }
+  }, [activeSource, loadDocuments]);
+
+  // Import document
+  const handleImport = async () => {
+    setIsImporting(true);
+    setImportResult(null);
+
+    try {
+      const body = importType === 'text'
+        ? { type: 'text', title: importTitle, content: importContent, tags: importTags.split(',').map(t => t.trim()).filter(Boolean) }
+        : { type: 'url', url: importUrl, tags: importTags.split(',').map(t => t.trim()).filter(Boolean) };
+
+      const res = await fetch('/api/knowledge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setImportResult({ success: true, message: '导入成功' });
+        setImportTitle('');
+        setImportContent('');
+        setImportUrl('');
+        setImportTags('');
+        loadDocuments();
+      } else {
+        setImportResult({ success: false, message: data.error || '导入失败' });
+      }
+    } catch (error) {
+      setImportResult({ success: false, message: '网络错误' });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  // Delete document
+  const handleDelete = async (docId: string) => {
+    if (!confirm('确定要删除这个文档吗？')) return;
+
+    try {
+      const res = await fetch(`/api/knowledge?docId=${docId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        loadDocuments();
+      }
+    } catch (error) {
+      console.error('Failed to delete document:', error);
+    }
+  };
+
+  // Search
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+
+    setIsSearching(true);
+    try {
+      const res = await fetch(`/api/knowledge?q=${encodeURIComponent(searchQuery)}&topK=10`);
+      const data = await res.json();
+      if (data.success) {
+        setSearchResults(data.data || []);
+        setSearchTotal(data.total || 0);
+      }
+    } catch (error) {
+      console.error('Search failed:', error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
   // Load Feishu spaces
   const loadFeishuSpaces = useCallback(async () => {
@@ -131,1250 +224,866 @@ export default function KnowledgePage() {
       if (data.success) {
         setFeishuSpaces(data.data || []);
       } else {
-        setFeishuError(data.error || '获取飞书知识库失败');
+        setFeishuError(data.error || '加载失败');
       }
-    } catch {
-      setFeishuError('网络请求失败，请检查飞书配置');
+    } catch (error) {
+      setFeishuError('网络错误');
     } finally {
       setIsLoadingFeishu(false);
     }
   }, []);
 
-  // Load Feishu nodes for a space
-  const loadFeishuNodes = useCallback(async (spaceId: string, parentToken?: string) => {
+  // Load Feishu nodes
+  const loadFeishuNodes = async (spaceId: string) => {
     setIsLoadingFeishu(true);
     setFeishuError('');
     try {
-      const params = new URLSearchParams({ action: 'nodes', spaceId });
-      if (parentToken) {
-        params.set('parentToken', parentToken);
-      }
-      const res = await fetch(`/api/feishu/wiki/spaces?${params}`);
+      const res = await fetch(`/api/feishu/wiki/spaces?spaceId=${spaceId}`);
       const data = await res.json();
       if (data.success) {
         setFeishuNodes(data.data || []);
       } else {
-        setFeishuError(data.error || '获取文档列表失败');
+        setFeishuError(data.error || '加载失败');
       }
-    } catch {
-      setFeishuError('网络请求失败');
+    } catch (error) {
+      setFeishuError('网络错误');
     } finally {
       setIsLoadingFeishu(false);
     }
-  }, []);
+  };
 
   // Import Feishu document
-  const handleImportFeishu = useCallback(async () => {
-    if (!selectedNode) return;
-
+  const handleImportFeishu = async (nodeToken: string, title: string) => {
     setIsImportingFeishu(true);
-    setImportResult(null);
-
     try {
       const res = await fetch('/api/feishu/wiki/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          documentId: selectedNode.objToken,
-          title: selectedNode.title,
-          tags: ['飞书', '知识库'],
-        }),
+        body: JSON.stringify({ nodeToken }),
       });
-
       const data = await res.json();
-
       if (data.success) {
-        setImportResult({ success: true, message: `文档「${selectedNode.title}」已导入知识库` });
-
-        // Save to local records
-        const newRecord: DocRecord = {
-          id: `feishu_${Date.now()}`,
-          title: selectedNode.title,
-          type: 'feishu',
-          content: `飞书文档 - ${selectedNode.objType}`,
-          createdAt: new Date().toISOString(),
-          tags: ['飞书', '知识库'],
-        };
-        saveDocRecords([newRecord, ...docRecords]);
+        alert(`已导入: ${title}`);
+        if (activeSource === 'local') loadDocuments();
       } else {
-        setImportResult({ success: false, message: data.error || '导入失败' });
+        alert(data.error || '导入失败');
       }
-    } catch {
-      setImportResult({ success: false, message: '网络请求失败' });
+    } catch (error) {
+      alert('网络错误');
     } finally {
       setIsImportingFeishu(false);
     }
-  }, [selectedNode, docRecords, saveDocRecords]);
+  };
 
-  // Load spaces when switching to feishu tab
-  useEffect(() => {
-    if (activeTab === 'feishu' && feishuSpaces.length === 0) {
-      loadFeishuSpaces();
-    }
-  }, [activeTab, feishuSpaces.length, loadFeishuSpaces]);
-
-  // Dify functions
+  // Load Dify datasets
   const loadDifyDatasets = useCallback(async () => {
     setIsLoadingDify(true);
     setDifyError('');
     try {
-      const res = await fetch('/api/dify/knowledge?action=datasets');
+      const res = await fetch('/api/dify/knowledge');
       const data = await res.json();
       if (data.success) {
         setDifyDatasets(data.data || []);
       } else {
-        setDifyError(data.error || '获取 Dify 知识库失败');
+        setDifyError(data.error || '加载失败');
       }
-    } catch {
-      setDifyError('网络请求失败，请检查 Dify 配置');
+    } catch (error) {
+      setDifyError('网络错误');
     } finally {
       setIsLoadingDify(false);
     }
   }, []);
 
-  const loadDifyDocuments = useCallback(async (datasetId: string) => {
+  // Load Dify documents
+  const loadDifyDocuments = async (datasetId: string) => {
     setIsLoadingDify(true);
     setDifyError('');
     try {
-      const res = await fetch(`/api/dify/knowledge?action=documents&datasetId=${datasetId}`);
+      const res = await fetch(`/api/dify/knowledge?datasetId=${datasetId}`);
       const data = await res.json();
       if (data.success) {
         setDifyDocuments(data.data || []);
       } else {
-        setDifyError(data.error || '获取文档列表失败');
+        setDifyError(data.error || '加载失败');
       }
-    } catch {
-      setDifyError('网络请求失败');
+    } catch (error) {
+      setDifyError('网络错误');
     } finally {
       setIsLoadingDify(false);
     }
-  }, []);
+  };
 
-  const handleImportDify = useCallback(async () => {
-    if (!selectedDifyDataset || !selectedDifyDocument) return;
-
+  // Import Dify document
+  const handleImportDify = async (datasetId: string, documentId: string, name: string) => {
     setIsImportingDify(true);
-    setImportResult(null);
-
     try {
       const res = await fetch('/api/dify/knowledge/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          datasetId: selectedDifyDataset.id,
-          documentId: selectedDifyDocument.id,
-        }),
+        body: JSON.stringify({ datasetId, documentId }),
       });
-
       const data = await res.json();
-
       if (data.success) {
-        setImportResult({ success: true, message: `文档「${selectedDifyDocument.name}」已导入知识库` });
-
-        const newRecord: DocRecord = {
-          id: `dify_${Date.now()}`,
-          title: selectedDifyDocument.name,
-          type: 'text',
-          content: `Dify 文档 - ${selectedDifyDataset.name}`,
-          createdAt: new Date().toISOString(),
-          tags: ['Dify', '知识库'],
-        };
-        saveDocRecords([newRecord, ...docRecords]);
+        alert(`已导入: ${name}`);
+        if (activeSource === 'local') loadDocuments();
       } else {
-        setImportResult({ success: false, message: data.error || '导入失败' });
+        alert(data.error || '导入失败');
       }
-    } catch {
-      setImportResult({ success: false, message: '网络请求失败' });
+    } catch (error) {
+      alert('网络错误');
     } finally {
       setIsImportingDify(false);
     }
-  }, [selectedDifyDataset, selectedDifyDocument, docRecords, saveDocRecords]);
+  };
 
-  useEffect(() => {
-    if (activeTab === 'dify' && difyDatasets.length === 0) {
-      loadDifyDatasets();
-    }
-  }, [activeTab, difyDatasets.length, loadDifyDatasets]);
-
-  // DingTalk functions
+  // Load DingTalk workspaces
   const loadDingtalkWorkspaces = useCallback(async () => {
     setIsLoadingDingtalk(true);
     setDingtalkError('');
     try {
-      const res = await fetch('/api/dingtalk/knowledge?action=workspaces');
+      const res = await fetch('/api/dingtalk/knowledge');
       const data = await res.json();
       if (data.success) {
         setDingtalkWorkspaces(data.data || []);
       } else {
-        setDingtalkError(data.error || '获取钉钉知识库失败');
+        setDingtalkError(data.error || '加载失败');
       }
-    } catch {
-      setDingtalkError('网络请求失败，请检查钉钉配置');
+    } catch (error) {
+      setDingtalkError('网络错误');
     } finally {
       setIsLoadingDingtalk(false);
     }
   }, []);
 
-  const loadDingtalkNodes = useCallback(async (workspaceId: string) => {
+  // Load DingTalk nodes
+  const loadDingtalkNodes = async (workspaceId: string) => {
     setIsLoadingDingtalk(true);
     setDingtalkError('');
     try {
-      const res = await fetch(`/api/dingtalk/knowledge?action=nodes&workspaceId=${workspaceId}`);
+      const res = await fetch(`/api/dingtalk/knowledge?workspaceId=${workspaceId}`);
       const data = await res.json();
       if (data.success) {
         setDingtalkNodes(data.data || []);
       } else {
-        setDingtalkError(data.error || '获取文档列表失败');
+        setDingtalkError(data.error || '加载失败');
       }
-    } catch {
-      setDingtalkError('网络请求失败');
+    } catch (error) {
+      setDingtalkError('网络错误');
     } finally {
       setIsLoadingDingtalk(false);
     }
-  }, []);
+  };
 
-  const handleImportDingtalk = useCallback(async () => {
-    if (!selectedDingtalkWorkspace || !selectedDingtalkNode) return;
-
+  // Import DingTalk document
+  const handleImportDingtalk = async (nodeId: string, name: string) => {
     setIsImportingDingtalk(true);
-    setImportResult(null);
-
     try {
       const res = await fetch('/api/dingtalk/knowledge/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          workspaceId: selectedDingtalkWorkspace.workspaceId,
-          nodeId: selectedDingtalkNode.nodeId,
-        }),
+        body: JSON.stringify({ nodeId }),
       });
-
       const data = await res.json();
-
       if (data.success) {
-        setImportResult({ success: true, message: `文档「${selectedDingtalkNode.name}」已导入知识库` });
-
-        const newRecord: DocRecord = {
-          id: `dingtalk_${Date.now()}`,
-          title: selectedDingtalkNode.name,
-          type: 'text',
-          content: `钉钉文档 - ${selectedDingtalkWorkspace.name}`,
-          createdAt: new Date().toISOString(),
-          tags: ['钉钉', '知识库'],
-        };
-        saveDocRecords([newRecord, ...docRecords]);
+        alert(`已导入: ${name}`);
+        if (activeSource === 'local') loadDocuments();
       } else {
-        setImportResult({ success: false, message: data.error || '导入失败' });
+        alert(data.error || '导入失败');
       }
-    } catch {
-      setImportResult({ success: false, message: '网络请求失败' });
+    } catch (error) {
+      alert('网络错误');
     } finally {
       setIsImportingDingtalk(false);
     }
-  }, [selectedDingtalkWorkspace, selectedDingtalkNode, docRecords, saveDocRecords]);
+  };
 
-  useEffect(() => {
-    if (activeTab === 'dingtalk' && dingtalkWorkspaces.length === 0) {
-      loadDingtalkWorkspaces();
-    }
-  }, [activeTab, dingtalkWorkspaces.length, loadDingtalkWorkspaces]);
-
-  // 导入文档
-  const handleImport = useCallback(async () => {
-    if (importType === 'text' && !importContent.trim()) return;
-    if (importType === 'url' && !importUrl.trim()) return;
-
-    setIsImporting(true);
-    setImportResult(null);
-
-    try {
-      const body = importType === 'url'
-        ? { type: 'url', url: importUrl, title: importTitle }
-        : { type: 'text', content: importContent, title: importTitle };
-
-      const res = await fetch('/api/knowledge', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      const data = await res.json();
-
-      if (data.success) {
-        setImportResult({ success: true, message: data.data?.message || '文档已成功导入知识库' });
-
-        // 保存到本地记录
-        const newRecord: DocRecord = {
-          id: `doc_${Date.now()}`,
-          title: importTitle || (importType === 'url' ? importUrl : importContent.slice(0, 30)),
-          type: importType,
-          content: importType === 'url' ? importUrl : importContent.slice(0, 200),
-          createdAt: new Date().toISOString(),
-          tags: importTags.split(',').map((t: string) => t.trim()).filter(Boolean),
-        };
-        saveDocRecords([newRecord, ...docRecords]);
-
-        // 清空表单
-        setImportTitle('');
-        setImportContent('');
-        setImportUrl('');
-        setImportTags('');
-      } else {
-        setImportResult({ success: false, message: data.error || '导入失败' });
-      }
-    } catch {
-      setImportResult({ success: false, message: '网络请求失败' });
-    } finally {
-      setIsImporting(false);
-    }
-  }, [importType, importContent, importUrl, importTitle, importTags, docRecords, saveDocRecords]);
-
-  // 搜索知识库
-  const handleSearch = useCallback(async () => {
-    if (!searchQuery.trim()) return;
-
-    setIsSearching(true);
-    setSearchResults([]);
-
-    try {
-      const res = await fetch(`/api/knowledge?q=${encodeURIComponent(searchQuery)}&topK=10`);
-      const data = await res.json();
-
-      if (data.success) {
-        setSearchResults(data.data?.chunks || []);
-        setSearchTotal(data.data?.total || 0);
-      } else {
-        setSearchResults([]);
-        setSearchTotal(0);
-      }
-    } catch {
-      setSearchResults([]);
-      setSearchTotal(0);
-    } finally {
-      setIsSearching(false);
-    }
-  }, [searchQuery]);
-
-  // 删除本地记录
-  const handleDeleteDoc = useCallback((docId: string) => {
-    const updated = docRecords.filter((d) => d.id !== docId);
-    saveDocRecords(updated);
-  }, [docRecords, saveDocRecords]);
+  // Handle source change
+  const handleSourceChange = (source: KnowledgeSource) => {
+    setActiveSource(source);
+    if (source === 'feishu') loadFeishuSpaces();
+    if (source === 'dify') loadDifyDatasets();
+    if (source === 'dingtalk') loadDingtalkWorkspaces();
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <BookOpen className="h-6 w-6 text-cyan-600" />
-            云文档知识库
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            导入文档素材，AI 语义检索，为内容创作提供知识支撑
-          </p>
+    <div className="flex h-full bg-gray-50">
+      {/* Left Sidebar - Knowledge Sources */}
+      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
+        <div className="p-4 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <Database className="w-5 h-5 text-blue-600" />
+            知识库
+          </h2>
         </div>
-        <Badge variant="outline" className="text-xs">
-          <Sparkles className="h-3 w-3 mr-1" />
-          语义搜索
-        </Badge>
-      </div>
 
-      {/* Tabs */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => setActiveTab('import')}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            activeTab === 'import'
-              ? 'bg-cyan-100 text-cyan-700'
-              : 'text-slate-500 hover:bg-slate-100'
-          }`}
-        >
-          <Upload className="h-4 w-4" />
-          文档导入
-        </button>
-        <button
-          onClick={() => setActiveTab('feishu')}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            activeTab === 'feishu'
-              ? 'bg-cyan-100 text-cyan-700'
-              : 'text-slate-500 hover:bg-slate-100'
-          }`}
-        >
-          <FolderOpen className="h-4 w-4" />
-          飞书知识库
-        </button>
-        <button
-          onClick={() => setActiveTab('dify')}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            activeTab === 'dify'
-              ? 'bg-cyan-100 text-cyan-700'
-              : 'text-slate-500 hover:bg-slate-100'
-          }`}
-        >
-          <FolderOpen className="h-4 w-4" />
-          Dify 知识库
-        </button>
-        <button
-          onClick={() => setActiveTab('dingtalk')}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            activeTab === 'dingtalk'
-              ? 'bg-cyan-100 text-cyan-700'
-              : 'text-slate-500 hover:bg-slate-100'
-          }`}
-        >
-          <FolderOpen className="h-4 w-4" />
-          钉钉知识库
-        </button>
-        <button
-          onClick={() => setActiveTab('search')}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            activeTab === 'search'
-              ? 'bg-cyan-100 text-cyan-700'
-              : 'text-slate-500 hover:bg-slate-100'
-          }`}
-        >
-          <Search className="h-4 w-4" />
-          语义搜索
-        </button>
-      </div>
+        <nav className="flex-1 p-3 space-y-1">
+          <button
+            onClick={() => handleSourceChange('local')}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              activeSource === 'local'
+                ? 'bg-blue-50 text-blue-700'
+                : 'text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <BookOpen className="w-4 h-4" />
+            本地知识库
+            {documents.length > 0 && (
+              <span className="ml-auto text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded">
+                {documents.length}
+              </span>
+            )}
+          </button>
 
-      {/* Import Tab */}
-      {activeTab === 'import' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          {/* Import Form */}
-          <div className="lg:col-span-2 space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">导入文档</CardTitle>
-                <CardDescription>
-                  支持文本内容和网页链接导入，系统会自动分块并向量化存储
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Import Type Toggle */}
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setImportType('text')}
-                    className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                      importType === 'text'
-                        ? 'bg-cyan-50 text-cyan-700 border border-cyan-200'
-                        : 'text-slate-500 hover:bg-slate-50 border border-transparent'
-                    }`}
-                  >
-                    <FileText className="h-4 w-4" />
-                    文本内容
-                  </button>
-                  <button
-                    onClick={() => setImportType('url')}
-                    className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                      importType === 'url'
-                        ? 'bg-cyan-50 text-cyan-700 border border-cyan-200'
-                        : 'text-slate-500 hover:bg-slate-50 border border-transparent'
-                    }`}
-                  >
-                    <Globe className="h-4 w-4" />
-                    网页链接
-                  </button>
-                </div>
+          <button
+            onClick={() => handleSourceChange('feishu')}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              activeSource === 'feishu'
+                ? 'bg-blue-50 text-blue-700'
+                : 'text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M4.025 12.836l4.14-4.14 7.14 7.14-4.14 4.14a2.5 2.5 0 01-3.54 0l-3.6-3.6a2.5 2.5 0 010-3.54z" opacity="0.8"/>
+              <path d="M12.836 4.025l4.14 4.14-7.14 7.14-4.14-4.14a2.5 2.5 0 010-3.54l3.6-3.6a2.5 2.5 0 013.54 0z" opacity="0.6"/>
+            </svg>
+            飞书知识库
+          </button>
 
-                {/* Title */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    文档标题（可选）
-                  </label>
-                  <Input
-                    value={importTitle}
-                    onChange={(e) => setImportTitle(e.target.value)}
-                    placeholder="给文档起个名字，方便后续检索"
-                  />
-                </div>
+          <button
+            onClick={() => handleSourceChange('dify')}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              activeSource === 'dify'
+                ? 'bg-blue-50 text-blue-700'
+                : 'text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <Sparkles className="w-4 h-4" />
+            Dify 知识库
+          </button>
 
-                {/* Content / URL */}
-                {importType === 'text' ? (
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      文档内容 <span className="text-red-500">*</span>
-                    </label>
-                    <textarea
-                      value={importContent}
-                      onChange={(e) => setImportContent(e.target.value)}
-                      placeholder="粘贴或输入文档内容，支持文章、笔记、会议纪要、产品资料等任意文本..."
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 resize-none"
-                      rows={10}
-                    />
-                    <p className="mt-1 text-xs text-slate-400">{importContent.length} 字符</p>
-                  </div>
-                ) : (
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      网页链接 <span className="text-red-500">*</span>
-                    </label>
-                    <Input
-                      value={importUrl}
-                      onChange={(e) => setImportUrl(e.target.value)}
-                      placeholder="https://example.com/article"
-                    />
-                    <p className="mt-1 text-xs text-slate-400">系统会自动抓取网页内容并导入</p>
-                  </div>
-                )}
+          <button
+            onClick={() => handleSourceChange('dingtalk')}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              activeSource === 'dingtalk'
+                ? 'bg-blue-50 text-blue-700'
+                : 'text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <MessageSquare className="w-4 h-4" />
+            钉钉知识库
+          </button>
+        </nav>
 
-                {/* Tags */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    标签（可选）
-                  </label>
-                  <Input
-                    value={importTags}
-                    onChange={(e) => setImportTags(e.target.value)}
-                    placeholder="用逗号分隔，例如：汽车行业, 新能源, 产品分析"
-                  />
-                </div>
+        <div className="p-3 border-t border-gray-200">
+          <button
+            onClick={() => { setActiveSource('local'); setLocalView('import'); }}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            导入文档
+          </button>
+        </div>
+      </aside>
 
-                {/* Import Result */}
-                {importResult && (
-                  <div className={`flex items-center gap-2 rounded-lg p-3 text-sm ${
-                    importResult.success
-                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                      : 'bg-red-50 text-red-700 border border-red-200'
-                  }`}>
-                    {importResult.success ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-                    {importResult.message}
-                  </div>
-                )}
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <header className="bg-white border-b border-gray-200 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-xl font-semibold text-gray-900">
+                {activeSource === 'local' && '本地知识库'}
+                {activeSource === 'feishu' && '飞书知识库'}
+                {activeSource === 'dify' && 'Dify 知识库'}
+                {activeSource === 'dingtalk' && '钉钉知识库'}
+              </h1>
+              <p className="text-sm text-gray-500 mt-0.5">
+                {activeSource === 'local' && `共 ${documents.length} 个文档`}
+                {activeSource === 'feishu' && '浏览并导入飞书文档'}
+                {activeSource === 'dify' && '浏览并导入 Dify 知识库文档'}
+                {activeSource === 'dingtalk' && '浏览并导入钉钉知识库文档'}
+              </p>
+            </div>
 
-                {/* Submit */}
+            {activeSource === 'local' && (
+              <div className="flex items-center gap-2">
                 <Button
-                  onClick={handleImport}
-                  disabled={isImporting || (importType === 'text' ? !importContent.trim() : !importUrl.trim())}
-                  className="w-full bg-cyan-600 hover:bg-cyan-700 text-white disabled:opacity-50"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setLocalView('search')}
+                  className={localView === 'search' ? 'bg-gray-100' : ''}
                 >
-                  {isImporting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      正在导入...
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="h-4 w-4 mr-2" />
-                      导入到知识库
-                    </>
-                  )}
+                  <Search className="w-4 h-4 mr-1.5" />
+                  检索测试
                 </Button>
-              </CardContent>
-            </Card>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setLocalView('documents')}
+                  className={localView === 'documents' ? 'bg-gray-100' : ''}
+                >
+                  <FileText className="w-4 h-4 mr-1.5" />
+                  文档列表
+                </Button>
+              </div>
+            )}
           </div>
+        </header>
 
-          {/* Doc Records Sidebar */}
-          <div className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">导入记录</CardTitle>
-                <CardDescription>最近导入的文档</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {docRecords.length === 0 ? (
-                  <div className="text-center py-8 text-slate-400">
-                    <BookOpen className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">暂无导入记录</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3 max-h-[500px] overflow-y-auto">
-                    {docRecords.map((doc) => (
-                      <div
-                        key={doc.id}
-                        className="group rounded-lg border border-slate-200 p-3 hover:border-slate-300 transition-colors"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5 mb-1">
-                              {doc.type === 'url' ? (
-                                <Link2 className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                              ) : doc.type === 'feishu' ? (
-                                <FolderOpen className="h-3.5 w-3.5 text-blue-600 shrink-0" />
-                              ) : (
-                                <FileText className="h-3.5 w-3.5 text-cyan-500 shrink-0" />
-                              )}
-                              <span className="text-sm font-medium text-slate-800 truncate">
-                                {doc.title}
-                              </span>
-                            </div>
-                            <p className="text-xs text-slate-400 line-clamp-2 mb-1.5">
-                              {doc.content}
-                            </p>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] text-slate-400 flex items-center gap-0.5">
-                                <Clock className="h-3 w-3" />
-                                {new Date(doc.createdAt).toLocaleDateString('zh-CN')}
-                              </span>
-                              {doc.tags.length > 0 && (
+        {/* Content */}
+        <div className="flex-1 overflow-auto p-6">
+          {/* Local Knowledge Base */}
+          {activeSource === 'local' && (
+            <>
+              {localView === 'documents' && (
+                <div className="space-y-4">
+                  {isLoadingDocs ? (
+                    <div className="flex items-center justify-center py-20">
+                      <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                    </div>
+                  ) : documents.length === 0 ? (
+                    <div className="text-center py-20">
+                      <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-1">暂无文档</h3>
+                      <p className="text-gray-500 mb-4">点击左侧「导入文档」开始添加知识</p>
+                      <Button onClick={() => setLocalView('import')}>
+                        <Plus className="w-4 h-4 mr-1.5" />
+                        导入文档
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                      <table className="w-full">
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">标题</th>
+                            <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">类型</th>
+                            <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">标签</th>
+                            <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">创建时间</th>
+                            <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">操作</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {documents.map((doc) => (
+                            <tr key={doc.id} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  <FileText className="w-4 h-4 text-gray-400" />
+                                  <span className="font-medium text-gray-900 truncate max-w-xs">{doc.title}</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <Badge variant="outline" className="text-xs">
+                                  {doc.type === 'text' ? '文本' : doc.type === 'url' ? 'URL' : '飞书'}
+                                </Badge>
+                              </td>
+                              <td className="px-4 py-3">
                                 <div className="flex gap-1 flex-wrap">
-                                  {doc.tags.slice(0, 2).map((tag) => (
-                                    <Badge key={tag} variant="outline" className="text-[9px] px-1 py-0">
+                                  {doc.tags.slice(0, 3).map((tag, i) => (
+                                    <Badge key={i} variant="secondary" className="text-xs">
                                       {tag}
                                     </Badge>
                                   ))}
-                                  {doc.tags.length > 2 && (
-                                    <span className="text-[9px] text-slate-400">+{doc.tags.length - 2}</span>
+                                  {doc.tags.length > 3 && (
+                                    <span className="text-xs text-gray-400">+{doc.tags.length - 3}</span>
                                   )}
                                 </div>
-                              )}
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => handleDeleteDoc(doc.id)}
-                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-all"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Tips */}
-            <Card>
-              <CardContent className="pt-5">
-                <h4 className="text-sm font-medium text-slate-700 mb-2">使用提示</h4>
-                <ul className="space-y-2 text-xs text-slate-500">
-                  <li className="flex items-start gap-1.5">
-                    <span className="text-cyan-500 mt-0.5">-</span>
-                    导入的文档会自动分块并向量化，支持语义搜索
-                  </li>
-                  <li className="flex items-start gap-1.5">
-                    <span className="text-cyan-500 mt-0.5">-</span>
-                    工作流中的「知识库搜索」模块可自动检索相关素材
-                  </li>
-                  <li className="flex items-start gap-1.5">
-                    <span className="text-cyan-500 mt-0.5">-</span>
-                    脚本工坊和公众号文章可引用知识库内容作为参考
-                  </li>
-                  <li className="flex items-start gap-1.5">
-                    <span className="text-cyan-500 mt-0.5">-</span>
-                    支持导入行业报告、竞品分析、品牌资料等任意文档
-                  </li>
-                </ul>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      )}
-
-      {/* Dify Tab */}
-      {activeTab === 'dify' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center justify-between">
-                  <span>Dify 知识库</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={loadDifyDatasets}
-                    disabled={isLoadingDify}
-                  >
-                    <RefreshCw className={`h-4 w-4 ${isLoadingDify ? 'animate-spin' : ''}`} />
-                  </Button>
-                </CardTitle>
-                <CardDescription>
-                  从 Dify 知识库导入文档到本地知识库
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {difyError && (
-                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 p-3 rounded-lg">
-                    <AlertCircle className="h-4 w-4" />
-                    {difyError}
-                  </div>
-                )}
-
-                {isLoadingDify && difyDatasets.length === 0 && (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-cyan-600" />
-                  </div>
-                )}
-
-                {!isLoadingDify && difyDatasets.length === 0 && !difyError && (
-                  <div className="text-center py-8 text-slate-500">
-                    <FolderOpen className="h-12 w-12 mx-auto mb-3 text-slate-300" />
-                    <p>暂无知识库，请先在 Dify 中创建知识库</p>
-                  </div>
-                )}
-
-                {difyDatasets.length > 0 && (
-                  <div className="space-y-3">
-                    <label className="block text-sm font-medium text-slate-700">选择知识库</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {difyDatasets.map((dataset) => (
-                        <button
-                          key={dataset.id}
-                          onClick={() => {
-                            setSelectedDifyDataset(dataset);
-                            setSelectedDifyDocument(null);
-                            loadDifyDocuments(dataset.id);
-                          }}
-                          className={`p-3 rounded-lg border text-left transition-colors ${
-                            selectedDifyDataset?.id === dataset.id
-                              ? 'border-cyan-500 bg-cyan-50'
-                              : 'border-slate-200 hover:border-slate-300'
-                          }`}
-                        >
-                          <div className="font-medium text-sm">{dataset.name}</div>
-                          <div className="text-xs text-slate-500 mt-1">{dataset.document_count} 篇文档</div>
-                        </button>
-                      ))}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-500">
+                                {new Date(doc.createdAt).toLocaleDateString('zh-CN')}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDelete(doc.id)}
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                  </div>
-                )}
-
-                {selectedDifyDataset && difyDocuments.length > 0 && (
-                  <div className="space-y-3">
-                    <label className="block text-sm font-medium text-slate-700">选择文档</label>
-                    <div className="max-h-60 overflow-y-auto space-y-2">
-                      {difyDocuments.map((doc) => (
-                        <button
-                          key={doc.id}
-                          onClick={() => setSelectedDifyDocument(doc)}
-                          className={`w-full p-3 rounded-lg border text-left transition-colors ${
-                            selectedDifyDocument?.id === doc.id
-                              ? 'border-cyan-500 bg-cyan-50'
-                              : 'border-slate-200 hover:border-slate-300'
-                          }`}
-                        >
-                          <div className="font-medium text-sm">{doc.name}</div>
-                          <div className="text-xs text-slate-500 mt-1">{doc.word_count} 字</div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {selectedDifyDocument && (
-                  <Button
-                    onClick={handleImportDify}
-                    disabled={isImportingDify}
-                    className="w-full bg-cyan-600 hover:bg-cyan-700 text-white"
-                  >
-                    {isImportingDify ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        导入中...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="h-4 w-4 mr-2" />
-                        导入「{selectedDifyDocument.name}」
-                      </>
-                    )}
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">使用说明</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-slate-600 space-y-2">
-                <p>1. 在平台设置中配置 Dify API Key 和 Base URL</p>
-                <p>2. 选择要导入的知识库</p>
-                <p>3. 选择要导入的文档</p>
-                <p>4. 点击导入按钮将文档保存到本地知识库</p>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      )}
-
-      {/* DingTalk Tab */}
-      {activeTab === 'dingtalk' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center justify-between">
-                  <span>钉钉知识库</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={loadDingtalkWorkspaces}
-                    disabled={isLoadingDingtalk}
-                  >
-                    <RefreshCw className={`h-4 w-4 ${isLoadingDingtalk ? 'animate-spin' : ''}`} />
-                  </Button>
-                </CardTitle>
-                <CardDescription>
-                  从钉钉知识库导入文档到本地知识库
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {dingtalkError && (
-                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 p-3 rounded-lg">
-                    <AlertCircle className="h-4 w-4" />
-                    {dingtalkError}
-                  </div>
-                )}
-
-                {isLoadingDingtalk && dingtalkWorkspaces.length === 0 && (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-cyan-600" />
-                  </div>
-                )}
-
-                {!isLoadingDingtalk && dingtalkWorkspaces.length === 0 && !dingtalkError && (
-                  <div className="text-center py-8 text-slate-500">
-                    <FolderOpen className="h-12 w-12 mx-auto mb-3 text-slate-300" />
-                    <p>暂无知识库，请先在钉钉中创建知识库</p>
-                  </div>
-                )}
-
-                {dingtalkWorkspaces.length > 0 && (
-                  <div className="space-y-3">
-                    <label className="block text-sm font-medium text-slate-700">选择知识库</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {dingtalkWorkspaces.map((ws) => (
-                        <button
-                          key={ws.workspaceId}
-                          onClick={() => {
-                            setSelectedDingtalkWorkspace(ws);
-                            setSelectedDingtalkNode(null);
-                            loadDingtalkNodes(ws.workspaceId);
-                          }}
-                          className={`p-3 rounded-lg border text-left transition-colors ${
-                            selectedDingtalkWorkspace?.workspaceId === ws.workspaceId
-                              ? 'border-cyan-500 bg-cyan-50'
-                              : 'border-slate-200 hover:border-slate-300'
-                          }`}
-                        >
-                          <div className="font-medium text-sm">{ws.name}</div>
-                          <div className="text-xs text-slate-500 mt-1">{ws.docCount} 篇文档</div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {selectedDingtalkWorkspace && dingtalkNodes.length > 0 && (
-                  <div className="space-y-3">
-                    <label className="block text-sm font-medium text-slate-700">选择文档</label>
-                    <div className="max-h-60 overflow-y-auto space-y-2">
-                      {dingtalkNodes.filter(n => n.nodeType === 'file').map((node) => (
-                        <button
-                          key={node.nodeId}
-                          onClick={() => setSelectedDingtalkNode(node)}
-                          className={`w-full p-3 rounded-lg border text-left transition-colors ${
-                            selectedDingtalkNode?.nodeId === node.nodeId
-                              ? 'border-cyan-500 bg-cyan-50'
-                              : 'border-slate-200 hover:border-slate-300'
-                          }`}
-                        >
-                          <div className="font-medium text-sm">{node.name}</div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {selectedDingtalkNode && (
-                  <Button
-                    onClick={handleImportDingtalk}
-                    disabled={isImportingDingtalk}
-                    className="w-full bg-cyan-600 hover:bg-cyan-700 text-white"
-                  >
-                    {isImportingDingtalk ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        导入中...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="h-4 w-4 mr-2" />
-                        导入「{selectedDingtalkNode.name}」
-                      </>
-                    )}
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">使用说明</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-slate-600 space-y-2">
-                <p>1. 在平台设置中配置钉钉 App Key、App Secret 和 Union ID</p>
-                <p>2. 选择要导入的知识库</p>
-                <p>3. 选择要导入的文档</p>
-                <p>4. 点击导入按钮将文档保存到本地知识库</p>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      )}
-
-      {/* Search Tab */}
-      {activeTab === 'search' && (
-        <div className="space-y-4">
-          {/* Search Bar */}
-          <Card>
-            <CardContent className="pt-5">
-              <div className="flex gap-3">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <Input
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                    placeholder="输入关键词或自然语言描述，AI 将从知识库中语义检索相关内容..."
-                    className="pl-10"
-                  />
-                </div>
-                <Button
-                  onClick={handleSearch}
-                  disabled={isSearching || !searchQuery.trim()}
-                  className="bg-cyan-600 hover:bg-cyan-700 text-white disabled:opacity-50"
-                >
-                  {isSearching ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <>
-                      <Search className="h-4 w-4 mr-1.5" />
-                      搜索
-                    </>
                   )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+                </div>
+              )}
 
-          {/* Search Results */}
-          {searchResults.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-medium text-slate-700">
-                  搜索结果
-                </h3>
-                <Badge variant="outline" className="text-xs">
-                  {searchTotal} 条匹配
-                </Badge>
-              </div>
-
-              {searchResults.map((result, index) => (
-                <Card key={index} className="hover:border-cyan-200 transition-colors">
-                  <CardContent className="pt-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Badge variant="outline" className="text-[10px] shrink-0">
-                            #{index + 1}
-                          </Badge>
-                          <div className="flex items-center gap-1">
-                            <div className="h-1.5 w-1.5 rounded-full bg-cyan-500" />
-                            <span className="text-xs text-slate-500">
-                              相关度 {(result.score * 100).toFixed(1)}%
-                            </span>
-                          </div>
-                        </div>
-                        <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-                          {result.content}
-                        </p>
+              {localView === 'import' && (
+                <div className="max-w-2xl">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Upload className="w-5 h-5" />
+                        导入文档
+                      </CardTitle>
+                      <CardDescription>将文本或网页内容导入到本地知识库</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex gap-2">
+                        <Button
+                          variant={importType === 'text' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setImportType('text')}
+                        >
+                          <FileText className="w-4 h-4 mr-1.5" />
+                          文本
+                        </Button>
+                        <Button
+                          variant={importType === 'url' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setImportType('url')}
+                        >
+                          <Link2 className="w-4 h-4 mr-1.5" />
+                          网页
+                        </Button>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          navigator.clipboard.writeText(result.content);
-                        }}
-                        className="shrink-0 text-slate-400 hover:text-slate-600"
-                      >
-                        复制
+
+                      {importType === 'text' ? (
+                        <>
+                          <div>
+                            <label className="text-sm font-medium text-gray-700 mb-1.5 block">标题</label>
+                            <Input
+                              value={importTitle}
+                              onChange={(e) => setImportTitle(e.target.value)}
+                              placeholder="输入文档标题"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-gray-700 mb-1.5 block">内容</label>
+                            <textarea
+                              value={importContent}
+                              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setImportContent(e.target.value)}
+                              placeholder="输入文档内容..."
+                              rows={8}
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 mb-1.5 block">网页链接</label>
+                          <Input
+                            value={importUrl}
+                            onChange={(e) => setImportUrl(e.target.value)}
+                            placeholder="https://example.com/article"
+                          />
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="text-sm font-medium text-gray-700 mb-1.5 block">标签（可选）</label>
+                        <Input
+                          value={importTags}
+                          onChange={(e) => setImportTags(e.target.value)}
+                          placeholder="用逗号分隔，如：产品, 技术, 教程"
+                        />
+                      </div>
+
+                      {importResult && (
+                        <div className={`p-3 rounded-lg text-sm ${
+                          importResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+                        }`}>
+                          {importResult.message}
+                        </div>
+                      )}
+
+                      <Button onClick={handleImport} disabled={isImporting} className="w-full">
+                        {isImporting ? (
+                          <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />导入中...</>
+                        ) : (
+                          <><Upload className="w-4 h-4 mr-1.5" />导入</>
+                        )}
                       </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              {localView === 'search' && (
+                <div className="max-w-2xl space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Search className="w-5 h-5" />
+                        语义检索测试
+                      </CardTitle>
+                      <CardDescription>测试知识库的语义搜索能力</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex gap-2">
+                        <Input
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder="输入搜索内容..."
+                          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                        />
+                        <Button onClick={handleSearch} disabled={isSearching}>
+                          {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                        </Button>
+                      </div>
+
+                      {searchResults.length > 0 && (
+                        <div className="space-y-3">
+                          <p className="text-sm text-gray-500">找到 {searchTotal} 条结果</p>
+                          {searchResults.map((result, i) => (
+                            <div key={i} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                              <div className="flex items-center justify-between mb-2">
+                                <Badge variant="outline" className="text-xs">
+                                  相似度: {(result.score * 100).toFixed(1)}%
+                                </Badge>
+                                <span className="text-xs text-gray-400">{result.docId.slice(0, 8)}</span>
+                              </div>
+                              <p className="text-sm text-gray-700 line-clamp-3">{result.content}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Feishu Knowledge Base */}
+          {activeSource === 'feishu' && (
+            <div className="space-y-4">
+              {isLoadingFeishu ? (
+                <div className="flex items-center justify-center py-20">
+                  <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                </div>
+              ) : feishuError ? (
+                <div className="text-center py-20">
+                  <AlertCircle className="w-12 h-12 text-red-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-1">加载失败</h3>
+                  <p className="text-red-500 mb-4">{feishuError}</p>
+                  <Button variant="outline" onClick={loadFeishuSpaces}>
+                    <RefreshCw className="w-4 h-4 mr-1.5" />
+                    重试
+                  </Button>
+                </div>
+              ) : !selectedSpace ? (
+                <>
+                  {feishuSpaces.length === 0 ? (
+                    <div className="text-center py-20">
+                      <FolderOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-1">暂无知识库空间</h3>
+                      <p className="text-gray-500 mb-4">请先在飞书中创建知识库</p>
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {feishuSpaces.map((space) => (
+                        <Card
+                          key={space.spaceId}
+                          className="cursor-pointer hover:shadow-md transition-shadow"
+                          onClick={() => {
+                            setSelectedSpace(space);
+                            loadFeishuNodes(space.spaceId);
+                          }}
+                        >
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <FolderOpen className="w-4 h-4 text-blue-500" />
+                              {space.name}
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            {space.description && (
+                              <p className="text-sm text-gray-500 line-clamp-2">{space.description}</p>
+                            )}
+                            <ChevronRight className="w-4 h-4 text-gray-400 mt-2" />
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Button variant="ghost" size="sm" onClick={() => { setSelectedSpace(null); setFeishuNodes([]); }}>
+                      <ChevronRight className="w-4 h-4 rotate-180" />
+                      返回
+                    </Button>
+                    <span className="text-sm text-gray-500">{selectedSpace.name}</span>
+                  </div>
+
+                  {feishuNodes.length === 0 ? (
+                    <div className="text-center py-20">
+                      <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-1">暂无文档</h3>
+                      <p className="text-gray-500">该知识库空间下没有文档</p>
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                      <table className="w-full">
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">标题</th>
+                            <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">类型</th>
+                            <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">操作</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {feishuNodes.map((node) => (
+                            <tr key={node.nodeToken} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  <FileText className="w-4 h-4 text-gray-400" />
+                                  <span className="font-medium text-gray-900">{node.title}</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <Badge variant="outline" className="text-xs">{node.objType}</Badge>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleImportFeishu(node.nodeToken, node.title)}
+                                  disabled={isImportingFeishu}
+                                >
+                                  <Download className="w-4 h-4 mr-1.5" />
+                                  导入
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
 
-          {/* Empty State */}
-          {searchResults.length === 0 && !isSearching && searchQuery && (
-            <Card>
-              <CardContent className="pt-10 pb-10 text-center">
-                <Search className="h-10 w-10 mx-auto text-slate-300 mb-3" />
-                <p className="text-sm text-slate-500">未找到相关内容</p>
-                <p className="text-xs text-slate-400 mt-1">尝试更换关键词或导入更多文档</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Initial State */}
-          {!searchQuery && (
-            <Card>
-              <CardContent className="pt-10 pb-10 text-center">
-                <BookOpen className="h-10 w-10 mx-auto text-slate-300 mb-3" />
-                <p className="text-sm text-slate-500">输入关键词开始语义搜索</p>
-                <p className="text-xs text-slate-400 mt-1">
-                  AI 会理解你的意图，从知识库中检索最相关的文档片段
-                </p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      )}
-
-      {/* Feishu Tab */}
-      {activeTab === 'feishu' && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          {/* Feishu Browser */}
-          <div className="lg:col-span-2 space-y-4">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <FolderOpen className="h-5 w-5 text-blue-500" />
-                      飞书知识库
-                    </CardTitle>
-                    <CardDescription>
-                      浏览并导入飞书知识库中的文档
-                    </CardDescription>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={loadFeishuSpaces}
-                    disabled={isLoadingFeishu}
-                  >
-                    <RefreshCw className={`h-4 w-4 mr-1 ${isLoadingFeishu ? 'animate-spin' : ''}`} />
-                    刷新
+          {/* Dify Knowledge Base */}
+          {activeSource === 'dify' && (
+            <div className="space-y-4">
+              {isLoadingDify ? (
+                <div className="flex items-center justify-center py-20">
+                  <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                </div>
+              ) : difyError ? (
+                <div className="text-center py-20">
+                  <AlertCircle className="w-12 h-12 text-red-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-1">加载失败</h3>
+                  <p className="text-red-500 mb-4">{difyError}</p>
+                  <Button variant="outline" onClick={loadDifyDatasets}>
+                    <RefreshCw className="w-4 h-4 mr-1.5" />
+                    重试
                   </Button>
                 </div>
-              </CardHeader>
-              <CardContent>
-                {feishuError && (
-                  <div className="flex items-center gap-2 rounded-lg p-3 text-sm bg-red-50 text-red-700 border border-red-200 mb-4">
-                    <AlertCircle className="h-4 w-4" />
-                    {feishuError}
-                  </div>
-                )}
-
-                {isLoadingFeishu && !feishuError && (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
-                    <span className="ml-2 text-sm text-slate-500">加载中...</span>
-                  </div>
-                )}
-
-                {!isLoadingFeishu && !selectedSpace && feishuSpaces.length === 0 && !feishuError && (
-                  <div className="text-center py-12">
-                    <FolderOpen className="h-10 w-10 mx-auto text-slate-300 mb-3" />
-                    <p className="text-sm text-slate-500">未找到知识库空间</p>
-                    <p className="text-xs text-slate-400 mt-1">
-                      请确保飞书应用已配置，且有知识库的访问权限
-                    </p>
-                  </div>
-                )}
-
-                {/* Space List */}
-                {!selectedSpace && feishuSpaces.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-slate-700 mb-3">选择知识库空间</p>
-                    {feishuSpaces.map((space) => (
-                      <button
-                        key={space.spaceId}
-                        onClick={() => {
-                          setSelectedSpace(space);
-                          loadFeishuNodes(space.spaceId);
-                        }}
-                        className="w-full flex items-center justify-between p-3 rounded-lg border border-slate-200 hover:border-blue-300 hover:bg-blue-50 transition-colors text-left"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                            <FolderOpen className="h-5 w-5 text-blue-600" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-slate-800">{space.name}</p>
-                            {space.description && (
-                              <p className="text-xs text-slate-500 line-clamp-1">{space.description}</p>
-                            )}
-                          </div>
-                        </div>
-                        <ChevronRight className="h-4 w-4 text-slate-400" />
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* Node List */}
-                {selectedSpace && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 mb-3">
-                      <button
-                        onClick={() => {
-                          setSelectedSpace(null);
-                          setSelectedNode(null);
-                          setFeishuNodes([]);
-                        }}
-                        className="text-sm text-blue-600 hover:text-blue-700"
-                      >
-                        ← 返回空间列表
-                      </button>
-                      <span className="text-sm text-slate-500">/ {selectedSpace.name}</span>
+              ) : !selectedDifyDataset ? (
+                <>
+                  {difyDatasets.length === 0 ? (
+                    <div className="text-center py-20">
+                      <Sparkles className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-1">暂无知识库</h3>
+                      <p className="text-gray-500 mb-4">请先在 Dify 中创建知识库，或在设置中配置 Dify API Key</p>
                     </div>
-
-                    {feishuNodes.length === 0 && !isLoadingFeishu && (
-                      <div className="text-center py-8">
-                        <FileText className="h-8 w-8 mx-auto text-slate-300 mb-2" />
-                        <p className="text-sm text-slate-500">此空间暂无文档</p>
-                      </div>
-                    )}
-
-                    {feishuNodes.map((node) => (
-                      <div
-                        key={node.nodeToken}
-                        className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
-                          selectedNode?.nodeToken === node.nodeToken
-                            ? 'border-blue-400 bg-blue-50'
-                            : 'border-slate-200 hover:border-blue-300'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <FileText className="h-5 w-5 text-slate-400 shrink-0" />
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-slate-800 truncate">{node.title}</p>
-                            <p className="text-xs text-slate-500">{node.objType}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {node.hasChild && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => loadFeishuNodes(selectedSpace.spaceId, node.nodeToken)}
-                            >
-                              展开
-                            </Button>
-                          )}
-                          <Button
-                            size="sm"
-                            onClick={() => setSelectedNode(node)}
-                            variant={selectedNode?.nodeToken === node.nodeToken ? 'default' : 'outline'}
-                          >
-                            {selectedNode?.nodeToken === node.nodeToken ? '已选择' : '选择'}
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Import Button */}
-            {selectedNode && (
-              <Card>
-                <CardContent className="pt-5">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-slate-700">已选择文档</p>
-                      <p className="text-sm text-slate-500">{selectedNode.title}</p>
-                    </div>
-                    <Button
-                      onClick={handleImportFeishu}
-                      disabled={isImportingFeishu}
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
-                    >
-                      {isImportingFeishu ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          导入中...
-                        </>
-                      ) : (
-                        <>
-                          <Plus className="h-4 w-4 mr-2" />
-                          导入到知识库
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                  {importResult && (
-                    <div className={`flex items-center gap-2 rounded-lg p-3 text-sm mt-4 ${
-                      importResult.success
-                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                        : 'bg-red-50 text-red-700 border border-red-200'
-                    }`}>
-                      {importResult.success ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-                      {importResult.message}
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {difyDatasets.map((dataset) => (
+                        <Card
+                          key={dataset.id}
+                          className="cursor-pointer hover:shadow-md transition-shadow"
+                          onClick={() => {
+                            setSelectedDifyDataset(dataset);
+                            loadDifyDocuments(dataset.id);
+                          }}
+                        >
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <Database className="w-4 h-4 text-purple-500" />
+                              {dataset.name}
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <p className="text-sm text-gray-500">{dataset.document_count} 个文档</p>
+                            <ChevronRight className="w-4 h-4 text-gray-400 mt-2" />
+                          </CardContent>
+                        </Card>
+                      ))}
                     </div>
                   )}
-                </CardContent>
-              </Card>
-            )}
-          </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Button variant="ghost" size="sm" onClick={() => { setSelectedDifyDataset(null); setDifyDocuments([]); }}>
+                      <ChevronRight className="w-4 h-4 rotate-180" />
+                      返回
+                    </Button>
+                    <span className="text-sm text-gray-500">{selectedDifyDataset.name}</span>
+                  </div>
 
-          {/* Sidebar */}
-          <div className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">飞书配置</CardTitle>
-                <CardDescription>连接飞书知识库</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2 text-xs text-slate-500">
-                  <li className="flex items-start gap-1.5">
-                    <span className="text-blue-500 mt-0.5">1.</span>
-                    在「平台设置」中配置飞书应用凭证（App ID 和 App Secret）
-                  </li>
-                  <li className="flex items-start gap-1.5">
-                    <span className="text-blue-500 mt-0.5">2.</span>
-                    确保飞书应用已开启知识库相关权限
-                  </li>
-                  <li className="flex items-start gap-1.5">
-                    <span className="text-blue-500 mt-0.5">3.</span>
-                    将应用添加为知识库成员或管理员
-                  </li>
-                  <li className="flex items-start gap-1.5">
-                    <span className="text-blue-500 mt-0.5">4.</span>
-                    选择文档并导入到本地知识库
-                  </li>
-                </ul>
-              </CardContent>
-            </Card>
+                  {difyDocuments.length === 0 ? (
+                    <div className="text-center py-20">
+                      <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-1">暂无文档</h3>
+                      <p className="text-gray-500">该知识库下没有文档</p>
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                      <table className="w-full">
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">标题</th>
+                            <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">字数</th>
+                            <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">操作</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {difyDocuments.map((doc) => (
+                            <tr key={doc.id} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  <FileText className="w-4 h-4 text-gray-400" />
+                                  <span className="font-medium text-gray-900">{doc.name}</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-500">
+                                {doc.word_count.toLocaleString()}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleImportDify(selectedDifyDataset.id, doc.id, doc.name)}
+                                  disabled={isImportingDify}
+                                >
+                                  <Download className="w-4 h-4 mr-1.5" />
+                                  导入
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
 
-            <Card>
-              <CardContent className="pt-5">
-                <h4 className="text-sm font-medium text-slate-700 mb-2">支持的文档类型</h4>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <FileText className="h-3.5 w-3.5 text-blue-500" />
-                    <span>docx - 新版文档</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <FileText className="h-3.5 w-3.5 text-green-500" />
-                    <span>sheet - 电子表格</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <FileText className="h-3.5 w-3.5 text-purple-500" />
-                    <span>bitable - 多维表格</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <FileText className="h-3.5 w-3.5 text-orange-500" />
-                    <span>mindnote - 思维笔记</span>
-                  </div>
+          {/* DingTalk Knowledge Base */}
+          {activeSource === 'dingtalk' && (
+            <div className="space-y-4">
+              {isLoadingDingtalk ? (
+                <div className="flex items-center justify-center py-20">
+                  <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+              ) : dingtalkError ? (
+                <div className="text-center py-20">
+                  <AlertCircle className="w-12 h-12 text-red-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-1">加载失败</h3>
+                  <p className="text-red-500 mb-4">{dingtalkError}</p>
+                  <Button variant="outline" onClick={loadDingtalkWorkspaces}>
+                    <RefreshCw className="w-4 h-4 mr-1.5" />
+                    重试
+                  </Button>
+                </div>
+              ) : !selectedDingtalkWorkspace ? (
+                <>
+                  {dingtalkWorkspaces.length === 0 ? (
+                    <div className="text-center py-20">
+                      <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-1">暂无知识库</h3>
+                      <p className="text-gray-500 mb-4">请先在钉钉中创建知识库，或在设置中配置钉钉凭证</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {dingtalkWorkspaces.map((workspace) => (
+                        <Card
+                          key={workspace.workspaceId}
+                          className="cursor-pointer hover:shadow-md transition-shadow"
+                          onClick={() => {
+                            setSelectedDingtalkWorkspace(workspace);
+                            loadDingtalkNodes(workspace.workspaceId);
+                          }}
+                        >
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <FolderOpen className="w-4 h-4 text-blue-500" />
+                              {workspace.name}
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <p className="text-sm text-gray-500">{workspace.docCount} 个文档</p>
+                            <ChevronRight className="w-4 h-4 text-gray-400 mt-2" />
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Button variant="ghost" size="sm" onClick={() => { setSelectedDingtalkWorkspace(null); setDingtalkNodes([]); }}>
+                      <ChevronRight className="w-4 h-4 rotate-180" />
+                      返回
+                    </Button>
+                    <span className="text-sm text-gray-500">{selectedDingtalkWorkspace.name}</span>
+                  </div>
+
+                  {dingtalkNodes.length === 0 ? (
+                    <div className="text-center py-20">
+                      <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-1">暂无文档</h3>
+                      <p className="text-gray-500">该知识库下没有文档</p>
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                      <table className="w-full">
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">标题</th>
+                            <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">类型</th>
+                            <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">操作</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {dingtalkNodes.map((node) => (
+                            <tr key={node.nodeId} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  <FileText className="w-4 h-4 text-gray-400" />
+                                  <span className="font-medium text-gray-900">{node.name}</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <Badge variant="outline" className="text-xs">{node.nodeType}</Badge>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleImportDingtalk(node.nodeId, node.name)}
+                                  disabled={isImportingDingtalk}
+                                >
+                                  <Download className="w-4 h-4 mr-1.5" />
+                                  导入
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
-      )}
+      </main>
     </div>
   );
 }
