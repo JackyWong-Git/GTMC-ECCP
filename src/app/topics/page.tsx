@@ -90,6 +90,7 @@ export default function TopicBoardPage() {
   const router = useRouter();
   const [supabase, setSupabase] = useState<ReturnType<typeof getSupabaseBrowserClient> | null>(null);
   const [activeTab, setActiveTab] = useState<"internal" | "external">("internal");
+  const [accessToken, setAccessToken] = useState<string>("");
   
   // Internal topics state
   const [internalTopics, setInternalTopics] = useState<InternalTopic[]>([]);
@@ -107,6 +108,18 @@ export default function TopicBoardPage() {
   const [relatedKeywords, setRelatedKeywords] = useState<string[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
+
+  // Auth-aware fetch helper
+  const authFetch = (url: string, options: RequestInit = {}) => {
+    const headers = new Headers(options.headers || {});
+    if (accessToken) {
+      headers.set("x-session", accessToken);
+    }
+    if (!(options.body instanceof FormData)) {
+      headers.set("Content-Type", "application/json");
+    }
+    return fetch(url, { ...options, headers });
+  };
 
   // Initialize supabase client on client side only
   useEffect(() => {
@@ -130,19 +143,30 @@ export default function TopicBoardPage() {
           return;
         }
 
+        // Store access token for all API calls
+        const token = session.access_token;
+        setAccessToken(token);
+
         // Get user info
         const userRes = await fetch("/api/auth/session", {
-          headers: { "x-session": session.access_token },
+          headers: { "x-session": token },
         });
         if (userRes.ok) {
           const userData = await userRes.json();
-          setCurrentUser(userData.data);
+          setCurrentUser(userData.user);
         }
 
         // Load internal topics
-        await loadInternalTopics();
+        const res = await fetch("/api/topics", {
+          headers: { "x-session": token },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setInternalTopics(data.data || []);
+        }
       } catch (err) {
         console.error("Init error:", err);
+      } finally {
         setLoading(false);
       }
     };
@@ -152,7 +176,7 @@ export default function TopicBoardPage() {
   const loadInternalTopics = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/topics");
+      const res = await authFetch("/api/topics");
       if (res.ok) {
         const data = await res.json();
         setInternalTopics(data.data || []);
@@ -169,9 +193,8 @@ export default function TopicBoardPage() {
     if (!currentUser) return;
 
     try {
-      const res = await fetch("/api/topics", {
+      const res = await authFetch("/api/topics", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: newTitle,
           description: newDescription,
@@ -202,9 +225,8 @@ export default function TopicBoardPage() {
     if (!currentUser) return;
 
     try {
-      const res = await fetch("/api/topics", {
+      const res = await authFetch("/api/topics", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: topicId,
           status: "脚本制作",
@@ -232,9 +254,8 @@ export default function TopicBoardPage() {
     const nextStatus = STATUS_FLOW[currentIndex + 1].key;
 
     try {
-      const res = await fetch("/api/topics", {
+      const res = await authFetch("/api/topics", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: topicId,
           status: nextStatus,
@@ -259,7 +280,7 @@ export default function TopicBoardPage() {
     if (!confirm("确定要删除这个选题吗？")) return;
 
     try {
-      const res = await fetch(`/api/topics?id=${topicId}`, {
+      const res = await authFetch(`/api/topics?id=${topicId}`, {
         method: "DELETE",
       });
 
@@ -290,9 +311,8 @@ export default function TopicBoardPage() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-      const res = await fetch("/api/douyin-trending", {
+      const res = await authFetch("/api/douyin-trending", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query: searchTerm,
           count: 20,
@@ -338,9 +358,8 @@ export default function TopicBoardPage() {
 
     try {
       // First, create the topic
-      const createRes = await fetch("/api/topics", {
+      const createRes = await authFetch("/api/topics", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: topic.title,
           description: topic.snippet,
@@ -355,9 +374,8 @@ export default function TopicBoardPage() {
         const newTopic = result.data;
         // Then, claim the topic using PATCH with correct format
         if (newTopic?.id) {
-          await fetch("/api/topics", {
+          await authFetch("/api/topics", {
             method: "PATCH",
-            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               id: newTopic.id,
               status: "脚本制作",
@@ -382,9 +400,8 @@ export default function TopicBoardPage() {
   // Save external topic to knowledge base
   const handleSaveToKnowledge = async (topic: ExternalTopic) => {
     try {
-      const res = await fetch("/api/knowledge", {
+      const res = await authFetch("/api/knowledge", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: topic.title,
           content: topic.snippet || topic.title,
@@ -409,9 +426,8 @@ export default function TopicBoardPage() {
   // Save internal topic to knowledge base
   const handleSaveTopicToKnowledge = async (topic: InternalTopic) => {
     try {
-      const res = await fetch("/api/knowledge", {
+      const res = await authFetch("/api/knowledge", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: topic.title,
           content: topic.description || topic.title,
