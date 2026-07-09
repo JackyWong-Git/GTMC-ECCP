@@ -282,15 +282,16 @@ export default function TopicBoardPage() {
     }
   };
 
-  // Import external topic to internal
-  const handleImportTopic = async (topic: ExternalTopic) => {
+  // Import and claim external topic to internal
+  const handleClaimExternalTopic = async (topic: ExternalTopic) => {
     if (!currentUser) {
       router.push("/login");
       return;
     }
 
     try {
-      const res = await fetch("/api/topics", {
+      // First, create the topic
+      const createRes = await fetch("/api/topics", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -302,13 +303,22 @@ export default function TopicBoardPage() {
         }),
       });
 
-      if (res.ok) {
+      if (createRes.ok) {
+        const newTopic = await createRes.json();
+        // Then, claim the topic
+        if (newTopic.id) {
+          await fetch(`/api/topics?id=${newTopic.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "claim" }),
+          });
+        }
         // Switch to internal tab and reload
         setActiveTab("internal");
         await loadInternalTopics();
       }
     } catch (err) {
-      console.error("Failed to import topic:", err);
+      console.error("Failed to claim external topic:", err);
     }
   };
 
@@ -652,10 +662,10 @@ export default function TopicBoardPage() {
                             </Button>
                             <Button
                               size="sm"
-                              onClick={() => handleImportTopic(topic)}
+                              onClick={() => handleClaimExternalTopic(topic)}
                             >
-                              <Plus className="w-3 h-3 mr-1" />
-                              导入
+                              <User className="w-3 h-3 mr-1" />
+                              认领
                             </Button>
                           </div>
                         </div>
