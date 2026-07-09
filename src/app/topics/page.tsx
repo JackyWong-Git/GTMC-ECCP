@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { toast, Toaster } from "sonner";
 import {
   Plus,
   User,
@@ -23,6 +24,7 @@ import {
   Flame,
   Sparkles,
   FileText,
+  Trash2,
 } from "lucide-react";
 
 // Topic status flow
@@ -179,15 +181,20 @@ export default function TopicBoardPage() {
       });
 
       if (res.ok) {
+        toast.success("选题创建成功");
         setShowCreateModal(false);
         setNewTitle("");
         setNewDescription("");
         setNewPriority("中");
         setNewDeadline("");
         await loadInternalTopics();
+      } else {
+        const err = await res.json().catch(() => ({ error: "Unknown error" }));
+        toast.error(err.error || "创建失败");
       }
     } catch (err) {
       console.error("Failed to create topic:", err);
+      toast.error("创建失败，请重试");
     }
   };
 
@@ -195,17 +202,26 @@ export default function TopicBoardPage() {
     if (!currentUser) return;
 
     try {
-      const res = await fetch(`/api/topics?id=${topicId}`, {
-        method: "PUT",
+      const res = await fetch("/api/topics", {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "claim" }),
+        body: JSON.stringify({
+          id: topicId,
+          status: "脚本制作",
+          assigned_to: currentUser.id,
+        }),
       });
 
       if (res.ok) {
+        toast.success("认领成功");
         await loadInternalTopics();
+      } else {
+        const error = await res.json().catch(() => ({ error: "Unknown error" }));
+        toast.error(error.error || "认领失败");
       }
     } catch (err) {
       console.error("Failed to claim topic:", err);
+      toast.error("认领失败，请重试");
     }
   };
 
@@ -216,17 +232,47 @@ export default function TopicBoardPage() {
     const nextStatus = STATUS_FLOW[currentIndex + 1].key;
 
     try {
-      const res = await fetch(`/api/topics?id=${topicId}`, {
-        method: "PUT",
+      const res = await fetch("/api/topics", {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "advance", status: nextStatus }),
+        body: JSON.stringify({
+          id: topicId,
+          status: nextStatus,
+        }),
       });
 
       if (res.ok) {
+        toast.success(`已推进到「${nextStatus}」`);
         await loadInternalTopics();
+      } else {
+        const error = await res.json().catch(() => ({ error: "Unknown error" }));
+        toast.error(error.error || "推进失败");
       }
     } catch (err) {
       console.error("Failed to advance status:", err);
+      toast.error("推进失败，请重试");
+    }
+  };
+
+  // Delete topic
+  const handleDeleteTopic = async (topicId: string) => {
+    if (!confirm("确定要删除这个选题吗？")) return;
+
+    try {
+      const res = await fetch(`/api/topics?id=${topicId}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        toast.success("删除成功");
+        await loadInternalTopics();
+      } else {
+        const error = await res.json().catch(() => ({ error: "Unknown error" }));
+        toast.error(error.error || "删除失败");
+      }
+    } catch (err) {
+      console.error("Failed to delete topic:", err);
+      toast.error("删除失败，请重试");
     }
   };
 
@@ -305,21 +351,31 @@ export default function TopicBoardPage() {
       });
 
       if (createRes.ok) {
-        const newTopic = await createRes.json();
-        // Then, claim the topic
-        if (newTopic.id) {
-          await fetch(`/api/topics?id=${newTopic.id}`, {
-            method: "PUT",
+        const result = await createRes.json();
+        const newTopic = result.data;
+        // Then, claim the topic using PATCH with correct format
+        if (newTopic?.id) {
+          await fetch("/api/topics", {
+            method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "claim" }),
+            body: JSON.stringify({
+              id: newTopic.id,
+              status: "脚本制作",
+              assigned_to: currentUser.id,
+            }),
           });
         }
+        toast.success("选题已认领");
         // Switch to internal tab and reload
         setActiveTab("internal");
         await loadInternalTopics();
+      } else {
+        const err = await createRes.json().catch(() => ({ error: "Unknown error" }));
+        toast.error(err.error || "认领失败");
       }
     } catch (err) {
       console.error("Failed to claim external topic:", err);
+      toast.error("认领失败，请重试");
     }
   };
 
@@ -339,14 +395,14 @@ export default function TopicBoardPage() {
       });
 
       if (res.ok) {
-        alert("已存入知识库");
+        toast.success("已存入知识库");
       } else {
-        const err = await res.json();
-        alert(`保存失败: ${err.error || "未知错误"}`);
+        const err = await res.json().catch(() => ({ error: "Unknown error" }));
+        toast.error(`保存失败: ${err.error || "未知错误"}`);
       }
     } catch (err) {
       console.error("Failed to save to knowledge:", err);
-      alert("保存失败，请重试");
+      toast.error("保存失败，请重试");
     }
   };
 
@@ -365,14 +421,14 @@ export default function TopicBoardPage() {
       });
 
       if (res.ok) {
-        alert("已存入知识库");
+        toast.success("已存入知识库");
       } else {
-        const err = await res.json();
-        alert(`保存失败: ${err.error || "未知错误"}`);
+        const err = await res.json().catch(() => ({ error: "Unknown error" }));
+        toast.error(`保存失败: ${err.error || "未知错误"}`);
       }
     } catch (err) {
       console.error("Failed to save to knowledge:", err);
-      alert("保存失败，请重试");
+      toast.error("保存失败，请重试");
     }
   };
 
@@ -404,6 +460,7 @@ export default function TopicBoardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <Toaster position="top-center" richColors />
       {/* Header */}
       <header className="bg-white border-b px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -558,6 +615,14 @@ export default function TopicBoardPage() {
                             >
                               <Database className="w-3 h-3 mr-1" />
                               知识库
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => handleDeleteTopic(topic.id)}
+                            >
+                              <Trash2 className="w-3 h-3" />
                             </Button>
                           </div>
                         </CardContent>
