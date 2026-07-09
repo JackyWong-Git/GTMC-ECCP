@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { LLMClient, Config, Message, KnowledgeClient, DataSourceType } from 'coze-coding-dev-sdk';
 import { MODEL_CONFIG } from '@/lib/llm-config';
-import { setupLLMEnv } from '@/lib/platform-config';
+import { setupLLMEnv, DEFAULT_KNOWLEDGE_DATASET } from '@/lib/platform-config';
 
 /**
  * 异步保存内容到知识库（不阻塞主流程）
@@ -26,7 +26,7 @@ async function saveToKnowledge(
 
     await knowledgeClient.addDocuments(
       [{ source: DataSourceType.TEXT, raw_data: taggedContent }],
-      'coze_doc_knowledge'
+      DEFAULT_KNOWLEDGE_DATASET
     );
     console.log(`[knowledge] ${metadata.type}已保存: ${metadata.title}`);
   } catch (error) {

@@ -2,6 +2,12 @@ import fs from "fs";
 import path from "path";
 
 /**
+ * 知识库默认数据集名称
+ */
+export const DEFAULT_KNOWLEDGE_DATASET = "coze_doc_knowledge";
+export const KNOWLEDGE_DATASET_NAME = DEFAULT_KNOWLEDGE_DATASET;
+
+/**
  * 平台配置类型
  */
 export interface PlatformConfig {
@@ -27,6 +33,9 @@ export interface PlatformConfig {
     appSecret: string;
     unionId: string;
   };
+  knowledge: {
+    datasetName: string;
+  };
 }
 
 const DEFAULT_CONFIG: PlatformConfig = {
@@ -51,6 +60,9 @@ const DEFAULT_CONFIG: PlatformConfig = {
     appKey: "",
     appSecret: "",
     unionId: "",
+  },
+  knowledge: {
+    datasetName: DEFAULT_KNOWLEDGE_DATASET,
   },
 };
 
@@ -117,6 +129,10 @@ export function getPlatformConfig(): PlatformConfig {
         process.env.DINGTALK_APP_SECRET || fileConfig.dingtalk?.appSecret || "",
       unionId:
         process.env.DINGTALK_UNION_ID || fileConfig.dingtalk?.unionId || "",
+    },
+    knowledge: {
+      datasetName:
+        process.env.KNOWLEDGE_DATASET_NAME || fileConfig.knowledge?.datasetName || KNOWLEDGE_DATASET_NAME,
     },
   };
 

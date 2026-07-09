@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDocumentBlocks, getWikiNodeInfo, type FeishuConfig } from "@/lib/feishu-client";
-import { getFeishuConfig as getFeishuPlatformConfig } from "@/lib/platform-config";
+import { getFeishuConfig as getFeishuPlatformConfig, KNOWLEDGE_DATASET_NAME } from "@/lib/platform-config";
 import { KnowledgeClient, Config, DataSourceType } from "coze-coding-dev-sdk";
 
 /**
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
         source: DataSourceType.TEXT,
         raw_data: content,
       }],
-      "coze_doc_knowledge"
+      KNOWLEDGE_DATASET_NAME
     );
 
     if (result.code !== 0) {

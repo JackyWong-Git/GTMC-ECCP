@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { KnowledgeClient, Config, DataSourceType } from "coze-coding-dev-sdk";
-import { setupLLMEnv } from "@/lib/platform-config";
+import { setupLLMEnv, DEFAULT_KNOWLEDGE_DATASET } from "@/lib/platform-config";
 
-const DATASET_NAME = "coze_doc_knowledge";
+const DATASET_NAME = DEFAULT_KNOWLEDGE_DATASET;
 
 /**
  * GET /api/knowledge

@@ -10,7 +10,7 @@ import {
 } from "@/lib/workflow-store";
 import { generateId } from "@/lib/workflow-store";
 import { getModelById } from "@/lib/llm-config";
-import { setupLLMEnv } from "@/lib/platform-config";
+import { setupLLMEnv, KNOWLEDGE_DATASET_NAME } from "@/lib/platform-config";
 
 /** POST — 执行工作流 */
 export async function POST(request: NextRequest) {
@@ -179,7 +179,7 @@ async function executeModule(mod: WorkflowModule, input: string): Promise<string
       const docContent = `[${contentType}] ${title}\n\n${input}`;
       const response = await knowledgeClient.addDocuments(
         [{ source: DataSourceType.TEXT, raw_data: docContent }],
-        "coze_doc_knowledge"
+        KNOWLEDGE_DATASET_NAME
       );
 
       if (response.code === 0) {

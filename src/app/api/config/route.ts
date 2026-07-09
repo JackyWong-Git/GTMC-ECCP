@@ -146,6 +146,7 @@ export async function POST(request: NextRequest) {
       feishu: sanitizedFeishu,
       dify: sanitizedDify,
       dingtalk: sanitizedDingtalk,
+      knowledge: currentConfig.knowledge,
     };
 
     savePlatformConfig(newConfig);

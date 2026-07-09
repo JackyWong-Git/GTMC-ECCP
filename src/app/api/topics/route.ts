@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import { topics, taskLogs } from "@/storage/database/shared/schema";
 import { eq } from "drizzle-orm";
 
@@ -31,11 +33,12 @@ function getDb() {
     throw new Error("Supabase configuration not found");
   }
 
-  const { drizzle } = require("drizzle-orm/supabase");
-  return drizzle(supabaseUrl, {
-    auth: { token: supabaseServiceKey },
-    casing: "snake_case",
-  });
+  // Convert Supabase URL to postgres connection string
+  const dbUrl = supabaseUrl.replace("https://", "postgres://").replace(".supabase.co", ".supabase.co:5432");
+  const connectionString = `${dbUrl}?user=postgres&password=${supabaseServiceKey}`;
+  
+  const client = postgres(connectionString);
+  return drizzle(client);
 }
 
 // GET - List all topics
@@ -72,7 +75,7 @@ export async function POST(request: NextRequest) {
     }
 
     const db = getDb();
-    const now = new Date().toISOString();
+    const now = new Date();
 
     const [newTopic] = await db.insert(topics).values({
       title,
@@ -81,7 +84,7 @@ export async function POST(request: NextRequest) {
       assigned_to: null,
       status: "待认领",
       priority: priority || "中",
-      deadline: deadline || null,
+      deadline: deadline ? new Date(deadline) : null,
       progress: 0,
       source: source || "手动创建",
       source_url: sourceUrl || null,
@@ -120,7 +123,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const db = getDb();
-    const now = new Date().toISOString();
+    const now = new Date();
 
     const updateData: Record<string, unknown> = { updated_at: now };
     
