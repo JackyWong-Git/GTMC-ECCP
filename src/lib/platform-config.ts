@@ -18,6 +18,15 @@ export interface PlatformConfig {
     appId: string;
     appSecret: string;
   };
+  dify: {
+    apiKey: string;
+    baseUrl: string;
+  };
+  dingtalk: {
+    appKey: string;
+    appSecret: string;
+    unionId: string;
+  };
 }
 
 const DEFAULT_CONFIG: PlatformConfig = {
@@ -33,6 +42,15 @@ const DEFAULT_CONFIG: PlatformConfig = {
   feishu: {
     appId: "",
     appSecret: "",
+  },
+  dify: {
+    apiKey: "",
+    baseUrl: "",
+  },
+  dingtalk: {
+    appKey: "",
+    appSecret: "",
+    unionId: "",
   },
 };
 
@@ -85,6 +103,20 @@ export function getPlatformConfig(): PlatformConfig {
         process.env.FEISHU_APP_ID || fileConfig.feishu?.appId || "",
       appSecret:
         process.env.FEISHU_APP_SECRET || fileConfig.feishu?.appSecret || "",
+    },
+    dify: {
+      apiKey:
+        process.env.DIFY_API_KEY || fileConfig.dify?.apiKey || "",
+      baseUrl:
+        process.env.DIFY_BASE_URL || fileConfig.dify?.baseUrl || "",
+    },
+    dingtalk: {
+      appKey:
+        process.env.DINGTALK_APP_KEY || fileConfig.dingtalk?.appKey || "",
+      appSecret:
+        process.env.DINGTALK_APP_SECRET || fileConfig.dingtalk?.appSecret || "",
+      unionId:
+        process.env.DINGTALK_UNION_ID || fileConfig.dingtalk?.unionId || "",
     },
   };
 
@@ -155,5 +187,36 @@ export function getFeishuConfig(): {
   return {
     ...config.feishu,
     isConfigured: !!(config.feishu.appId && config.feishu.appSecret),
+  };
+}
+
+/**
+ * 获取 Dify 配置（便捷方法）
+ */
+export function getDifyConfig(): {
+  apiKey: string;
+  baseUrl: string;
+  isConfigured: boolean;
+} {
+  const config = getPlatformConfig();
+  return {
+    ...config.dify,
+    isConfigured: !!(config.dify.apiKey && config.dify.baseUrl),
+  };
+}
+
+/**
+ * 获取钉钉配置（便捷方法）
+ */
+export function getDingTalkConfig(): {
+  appKey: string;
+  appSecret: string;
+  unionId: string;
+  isConfigured: boolean;
+} {
+  const config = getPlatformConfig();
+  return {
+    ...config.dingtalk,
+    isConfigured: !!(config.dingtalk.appKey && config.dingtalk.appSecret),
   };
 }

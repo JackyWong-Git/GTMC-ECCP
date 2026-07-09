@@ -32,6 +32,17 @@ export async function GET() {
           appSecret: config.feishu.appSecret ? "******" : "",
           isConfigured: !!(config.feishu.appId && config.feishu.appSecret),
         },
+        dify: {
+          apiKey: config.dify.apiKey ? "******" : "",
+          baseUrl: config.dify.baseUrl || "",
+          isConfigured: !!(config.dify.apiKey && config.dify.baseUrl),
+        },
+        dingtalk: {
+          appKey: config.dingtalk.appKey ? `${config.dingtalk.appKey.slice(0, 8)}****` : "",
+          appSecret: config.dingtalk.appSecret ? "******" : "",
+          unionId: config.dingtalk.unionId || "",
+          isConfigured: !!(config.dingtalk.appKey && config.dingtalk.appSecret),
+        },
       },
     });
   } catch (error) {
@@ -57,6 +68,8 @@ export async function POST(request: NextRequest) {
     const allowedDouyinFields = ['clientKey', 'clientSecret', 'redirectUri'];
     const allowedLlmFields = ['apiKey', 'baseUrl'];
     const allowedFeishuFields = ['appId', 'appSecret'];
+    const allowedDifyFields = ['apiKey', 'baseUrl'];
+    const allowedDingtalkFields = ['appKey', 'appSecret', 'unionId'];
 
     const douyin = body.douyin ?? {
       clientKey: body.douyinClientKey,
@@ -70,6 +83,15 @@ export async function POST(request: NextRequest) {
     const feishu = body.feishu ?? {
       appId: body.feishuAppId,
       appSecret: body.feishuAppSecret,
+    };
+    const dify = body.dify ?? {
+      apiKey: body.difyApiKey,
+      baseUrl: body.difyBaseUrl,
+    };
+    const dingtalk = body.dingtalk ?? {
+      appKey: body.dingtalkAppKey,
+      appSecret: body.dingtalkAppSecret,
+      unionId: body.dingtalkUnionId,
     };
 
     // 过滤只允许已知字段
@@ -100,10 +122,30 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const sanitizedDify = { ...currentConfig.dify };
+    if (dify && typeof dify === 'object') {
+      for (const key of allowedDifyFields) {
+        if (key in dify && typeof dify[key] === 'string') {
+          (sanitizedDify as Record<string, string>)[key] = dify[key];
+        }
+      }
+    }
+
+    const sanitizedDingtalk = { ...currentConfig.dingtalk };
+    if (dingtalk && typeof dingtalk === 'object') {
+      for (const key of allowedDingtalkFields) {
+        if (key in dingtalk && typeof dingtalk[key] === 'string') {
+          (sanitizedDingtalk as Record<string, string>)[key] = dingtalk[key];
+        }
+      }
+    }
+
     const newConfig: PlatformConfig = {
       douyin: sanitizedDouyin,
       llm: sanitizedLlm,
       feishu: sanitizedFeishu,
+      dify: sanitizedDify,
+      dingtalk: sanitizedDingtalk,
     };
 
     savePlatformConfig(newConfig);
@@ -120,6 +162,12 @@ export async function POST(request: NextRequest) {
         },
         feishu: {
           isConfigured: !!(newConfig.feishu.appId && newConfig.feishu.appSecret),
+        },
+        dify: {
+          isConfigured: !!(newConfig.dify.apiKey && newConfig.dify.baseUrl),
+        },
+        dingtalk: {
+          isConfigured: !!(newConfig.dingtalk.appKey && newConfig.dingtalk.appSecret),
         },
       },
     });

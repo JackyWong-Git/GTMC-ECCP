@@ -62,7 +62,7 @@ interface FeishuNode {
 }
 
 export default function KnowledgePage() {
-  const [activeTab, setActiveTab] = useState<'import' | 'search' | 'feishu'>('import');
+  const [activeTab, setActiveTab] = useState<'import' | 'search' | 'feishu' | 'dify' | 'dingtalk'>('import');
   const [importType, setImportType] = useState<'text' | 'url'>('text');
   const [importTitle, setImportTitle] = useState('');
   const [importContent, setImportContent] = useState('');
@@ -84,6 +84,24 @@ export default function KnowledgePage() {
   const [isLoadingFeishu, setIsLoadingFeishu] = useState(false);
   const [feishuError, setFeishuError] = useState('');
   const [isImportingFeishu, setIsImportingFeishu] = useState(false);
+
+  // Dify state
+  const [difyDatasets, setDifyDatasets] = useState<Array<{ id: string; name: string; document_count: number }>>([]);
+  const [difyDocuments, setDifyDocuments] = useState<Array<{ id: string; name: string; word_count: number }>>([]);
+  const [selectedDifyDataset, setSelectedDifyDataset] = useState<{ id: string; name: string } | null>(null);
+  const [selectedDifyDocument, setSelectedDifyDocument] = useState<{ id: string; name: string } | null>(null);
+  const [isLoadingDify, setIsLoadingDify] = useState(false);
+  const [difyError, setDifyError] = useState('');
+  const [isImportingDify, setIsImportingDify] = useState(false);
+
+  // DingTalk state
+  const [dingtalkWorkspaces, setDingtalkWorkspaces] = useState<Array<{ workspaceId: string; name: string; docCount: number }>>([]);
+  const [dingtalkNodes, setDingtalkNodes] = useState<Array<{ nodeId: string; name: string; nodeType: string; docKey?: string }>>([]);
+  const [selectedDingtalkWorkspace, setSelectedDingtalkWorkspace] = useState<{ workspaceId: string; name: string } | null>(null);
+  const [selectedDingtalkNode, setSelectedDingtalkNode] = useState<{ nodeId: string; name: string; docKey?: string } | null>(null);
+  const [isLoadingDingtalk, setIsLoadingDingtalk] = useState(false);
+  const [dingtalkError, setDingtalkError] = useState('');
+  const [isImportingDingtalk, setIsImportingDingtalk] = useState(false);
 
   // 本地文档记录（用于展示历史导入）
   const [docRecords, setDocRecords] = useState<DocRecord[]>(() => {
@@ -195,6 +213,172 @@ export default function KnowledgePage() {
     }
   }, [activeTab, feishuSpaces.length, loadFeishuSpaces]);
 
+  // Dify functions
+  const loadDifyDatasets = useCallback(async () => {
+    setIsLoadingDify(true);
+    setDifyError('');
+    try {
+      const res = await fetch('/api/dify/knowledge?action=datasets');
+      const data = await res.json();
+      if (data.success) {
+        setDifyDatasets(data.data || []);
+      } else {
+        setDifyError(data.error || '获取 Dify 知识库失败');
+      }
+    } catch {
+      setDifyError('网络请求失败，请检查 Dify 配置');
+    } finally {
+      setIsLoadingDify(false);
+    }
+  }, []);
+
+  const loadDifyDocuments = useCallback(async (datasetId: string) => {
+    setIsLoadingDify(true);
+    setDifyError('');
+    try {
+      const res = await fetch(`/api/dify/knowledge?action=documents&datasetId=${datasetId}`);
+      const data = await res.json();
+      if (data.success) {
+        setDifyDocuments(data.data || []);
+      } else {
+        setDifyError(data.error || '获取文档列表失败');
+      }
+    } catch {
+      setDifyError('网络请求失败');
+    } finally {
+      setIsLoadingDify(false);
+    }
+  }, []);
+
+  const handleImportDify = useCallback(async () => {
+    if (!selectedDifyDataset || !selectedDifyDocument) return;
+
+    setIsImportingDify(true);
+    setImportResult(null);
+
+    try {
+      const res = await fetch('/api/dify/knowledge/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          datasetId: selectedDifyDataset.id,
+          documentId: selectedDifyDocument.id,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setImportResult({ success: true, message: `文档「${selectedDifyDocument.name}」已导入知识库` });
+
+        const newRecord: DocRecord = {
+          id: `dify_${Date.now()}`,
+          title: selectedDifyDocument.name,
+          type: 'text',
+          content: `Dify 文档 - ${selectedDifyDataset.name}`,
+          createdAt: new Date().toISOString(),
+          tags: ['Dify', '知识库'],
+        };
+        saveDocRecords([newRecord, ...docRecords]);
+      } else {
+        setImportResult({ success: false, message: data.error || '导入失败' });
+      }
+    } catch {
+      setImportResult({ success: false, message: '网络请求失败' });
+    } finally {
+      setIsImportingDify(false);
+    }
+  }, [selectedDifyDataset, selectedDifyDocument, docRecords, saveDocRecords]);
+
+  useEffect(() => {
+    if (activeTab === 'dify' && difyDatasets.length === 0) {
+      loadDifyDatasets();
+    }
+  }, [activeTab, difyDatasets.length, loadDifyDatasets]);
+
+  // DingTalk functions
+  const loadDingtalkWorkspaces = useCallback(async () => {
+    setIsLoadingDingtalk(true);
+    setDingtalkError('');
+    try {
+      const res = await fetch('/api/dingtalk/knowledge?action=workspaces');
+      const data = await res.json();
+      if (data.success) {
+        setDingtalkWorkspaces(data.data || []);
+      } else {
+        setDingtalkError(data.error || '获取钉钉知识库失败');
+      }
+    } catch {
+      setDingtalkError('网络请求失败，请检查钉钉配置');
+    } finally {
+      setIsLoadingDingtalk(false);
+    }
+  }, []);
+
+  const loadDingtalkNodes = useCallback(async (workspaceId: string) => {
+    setIsLoadingDingtalk(true);
+    setDingtalkError('');
+    try {
+      const res = await fetch(`/api/dingtalk/knowledge?action=nodes&workspaceId=${workspaceId}`);
+      const data = await res.json();
+      if (data.success) {
+        setDingtalkNodes(data.data || []);
+      } else {
+        setDingtalkError(data.error || '获取文档列表失败');
+      }
+    } catch {
+      setDingtalkError('网络请求失败');
+    } finally {
+      setIsLoadingDingtalk(false);
+    }
+  }, []);
+
+  const handleImportDingtalk = useCallback(async () => {
+    if (!selectedDingtalkWorkspace || !selectedDingtalkNode) return;
+
+    setIsImportingDingtalk(true);
+    setImportResult(null);
+
+    try {
+      const res = await fetch('/api/dingtalk/knowledge/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspaceId: selectedDingtalkWorkspace.workspaceId,
+          nodeId: selectedDingtalkNode.nodeId,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setImportResult({ success: true, message: `文档「${selectedDingtalkNode.name}」已导入知识库` });
+
+        const newRecord: DocRecord = {
+          id: `dingtalk_${Date.now()}`,
+          title: selectedDingtalkNode.name,
+          type: 'text',
+          content: `钉钉文档 - ${selectedDingtalkWorkspace.name}`,
+          createdAt: new Date().toISOString(),
+          tags: ['钉钉', '知识库'],
+        };
+        saveDocRecords([newRecord, ...docRecords]);
+      } else {
+        setImportResult({ success: false, message: data.error || '导入失败' });
+      }
+    } catch {
+      setImportResult({ success: false, message: '网络请求失败' });
+    } finally {
+      setIsImportingDingtalk(false);
+    }
+  }, [selectedDingtalkWorkspace, selectedDingtalkNode, docRecords, saveDocRecords]);
+
+  useEffect(() => {
+    if (activeTab === 'dingtalk' && dingtalkWorkspaces.length === 0) {
+      loadDingtalkWorkspaces();
+    }
+  }, [activeTab, dingtalkWorkspaces.length, loadDingtalkWorkspaces]);
+
   // 导入文档
   const handleImport = useCallback(async () => {
     if (importType === 'text' && !importContent.trim()) return;
@@ -297,7 +481,7 @@ export default function KnowledgePage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button
           onClick={() => setActiveTab('import')}
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
@@ -319,6 +503,28 @@ export default function KnowledgePage() {
         >
           <FolderOpen className="h-4 w-4" />
           飞书知识库
+        </button>
+        <button
+          onClick={() => setActiveTab('dify')}
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'dify'
+              ? 'bg-cyan-100 text-cyan-700'
+              : 'text-slate-500 hover:bg-slate-100'
+          }`}
+        >
+          <FolderOpen className="h-4 w-4" />
+          Dify 知识库
+        </button>
+        <button
+          onClick={() => setActiveTab('dingtalk')}
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'dingtalk'
+              ? 'bg-cyan-100 text-cyan-700'
+              : 'text-slate-500 hover:bg-slate-100'
+          }`}
+        >
+          <FolderOpen className="h-4 w-4" />
+          钉钉知识库
         </button>
         <button
           onClick={() => setActiveTab('search')}
@@ -551,6 +757,263 @@ export default function KnowledgePage() {
                     支持导入行业报告、竞品分析、品牌资料等任意文档
                   </li>
                 </ul>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* Dify Tab */}
+      {activeTab === 'dify' && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2 space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center justify-between">
+                  <span>Dify 知识库</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={loadDifyDatasets}
+                    disabled={isLoadingDify}
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isLoadingDify ? 'animate-spin' : ''}`} />
+                  </Button>
+                </CardTitle>
+                <CardDescription>
+                  从 Dify 知识库导入文档到本地知识库
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {difyError && (
+                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 p-3 rounded-lg">
+                    <AlertCircle className="h-4 w-4" />
+                    {difyError}
+                  </div>
+                )}
+
+                {isLoadingDify && difyDatasets.length === 0 && (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-cyan-600" />
+                  </div>
+                )}
+
+                {!isLoadingDify && difyDatasets.length === 0 && !difyError && (
+                  <div className="text-center py-8 text-slate-500">
+                    <FolderOpen className="h-12 w-12 mx-auto mb-3 text-slate-300" />
+                    <p>暂无知识库，请先在 Dify 中创建知识库</p>
+                  </div>
+                )}
+
+                {difyDatasets.length > 0 && (
+                  <div className="space-y-3">
+                    <label className="block text-sm font-medium text-slate-700">选择知识库</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {difyDatasets.map((dataset) => (
+                        <button
+                          key={dataset.id}
+                          onClick={() => {
+                            setSelectedDifyDataset(dataset);
+                            setSelectedDifyDocument(null);
+                            loadDifyDocuments(dataset.id);
+                          }}
+                          className={`p-3 rounded-lg border text-left transition-colors ${
+                            selectedDifyDataset?.id === dataset.id
+                              ? 'border-cyan-500 bg-cyan-50'
+                              : 'border-slate-200 hover:border-slate-300'
+                          }`}
+                        >
+                          <div className="font-medium text-sm">{dataset.name}</div>
+                          <div className="text-xs text-slate-500 mt-1">{dataset.document_count} 篇文档</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedDifyDataset && difyDocuments.length > 0 && (
+                  <div className="space-y-3">
+                    <label className="block text-sm font-medium text-slate-700">选择文档</label>
+                    <div className="max-h-60 overflow-y-auto space-y-2">
+                      {difyDocuments.map((doc) => (
+                        <button
+                          key={doc.id}
+                          onClick={() => setSelectedDifyDocument(doc)}
+                          className={`w-full p-3 rounded-lg border text-left transition-colors ${
+                            selectedDifyDocument?.id === doc.id
+                              ? 'border-cyan-500 bg-cyan-50'
+                              : 'border-slate-200 hover:border-slate-300'
+                          }`}
+                        >
+                          <div className="font-medium text-sm">{doc.name}</div>
+                          <div className="text-xs text-slate-500 mt-1">{doc.word_count} 字</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedDifyDocument && (
+                  <Button
+                    onClick={handleImportDify}
+                    disabled={isImportingDify}
+                    className="w-full bg-cyan-600 hover:bg-cyan-700 text-white"
+                  >
+                    {isImportingDify ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        导入中...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4 mr-2" />
+                        导入「{selectedDifyDocument.name}」
+                      </>
+                    )}
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">使用说明</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-slate-600 space-y-2">
+                <p>1. 在平台设置中配置 Dify API Key 和 Base URL</p>
+                <p>2. 选择要导入的知识库</p>
+                <p>3. 选择要导入的文档</p>
+                <p>4. 点击导入按钮将文档保存到本地知识库</p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* DingTalk Tab */}
+      {activeTab === 'dingtalk' && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2 space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center justify-between">
+                  <span>钉钉知识库</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={loadDingtalkWorkspaces}
+                    disabled={isLoadingDingtalk}
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isLoadingDingtalk ? 'animate-spin' : ''}`} />
+                  </Button>
+                </CardTitle>
+                <CardDescription>
+                  从钉钉知识库导入文档到本地知识库
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {dingtalkError && (
+                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 p-3 rounded-lg">
+                    <AlertCircle className="h-4 w-4" />
+                    {dingtalkError}
+                  </div>
+                )}
+
+                {isLoadingDingtalk && dingtalkWorkspaces.length === 0 && (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-cyan-600" />
+                  </div>
+                )}
+
+                {!isLoadingDingtalk && dingtalkWorkspaces.length === 0 && !dingtalkError && (
+                  <div className="text-center py-8 text-slate-500">
+                    <FolderOpen className="h-12 w-12 mx-auto mb-3 text-slate-300" />
+                    <p>暂无知识库，请先在钉钉中创建知识库</p>
+                  </div>
+                )}
+
+                {dingtalkWorkspaces.length > 0 && (
+                  <div className="space-y-3">
+                    <label className="block text-sm font-medium text-slate-700">选择知识库</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {dingtalkWorkspaces.map((ws) => (
+                        <button
+                          key={ws.workspaceId}
+                          onClick={() => {
+                            setSelectedDingtalkWorkspace(ws);
+                            setSelectedDingtalkNode(null);
+                            loadDingtalkNodes(ws.workspaceId);
+                          }}
+                          className={`p-3 rounded-lg border text-left transition-colors ${
+                            selectedDingtalkWorkspace?.workspaceId === ws.workspaceId
+                              ? 'border-cyan-500 bg-cyan-50'
+                              : 'border-slate-200 hover:border-slate-300'
+                          }`}
+                        >
+                          <div className="font-medium text-sm">{ws.name}</div>
+                          <div className="text-xs text-slate-500 mt-1">{ws.docCount} 篇文档</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedDingtalkWorkspace && dingtalkNodes.length > 0 && (
+                  <div className="space-y-3">
+                    <label className="block text-sm font-medium text-slate-700">选择文档</label>
+                    <div className="max-h-60 overflow-y-auto space-y-2">
+                      {dingtalkNodes.filter(n => n.nodeType === 'file').map((node) => (
+                        <button
+                          key={node.nodeId}
+                          onClick={() => setSelectedDingtalkNode(node)}
+                          className={`w-full p-3 rounded-lg border text-left transition-colors ${
+                            selectedDingtalkNode?.nodeId === node.nodeId
+                              ? 'border-cyan-500 bg-cyan-50'
+                              : 'border-slate-200 hover:border-slate-300'
+                          }`}
+                        >
+                          <div className="font-medium text-sm">{node.name}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedDingtalkNode && (
+                  <Button
+                    onClick={handleImportDingtalk}
+                    disabled={isImportingDingtalk}
+                    className="w-full bg-cyan-600 hover:bg-cyan-700 text-white"
+                  >
+                    {isImportingDingtalk ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        导入中...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4 mr-2" />
+                        导入「{selectedDingtalkNode.name}」
+                      </>
+                    )}
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">使用说明</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-slate-600 space-y-2">
+                <p>1. 在平台设置中配置钉钉 App Key、App Secret 和 Union ID</p>
+                <p>2. 选择要导入的知识库</p>
+                <p>3. 选择要导入的文档</p>
+                <p>4. 点击导入按钮将文档保存到本地知识库</p>
               </CardContent>
             </Card>
           </div>
