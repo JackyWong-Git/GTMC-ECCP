@@ -9,7 +9,7 @@ import {
   Settings, Save, Loader2, CheckCircle2, AlertCircle,
   Eye, EyeOff, Sparkles, Video, FileText, Zap, MessageSquare,
   BookOpen, Users, Workflow, LayoutTemplate, Plus, Trash2,
-  Mail, Shield, UserCircle, Copy, Play, Pause, MoreVertical,
+  Mail, Shield, UserCircle, Copy, Play, Pause, MoreVertical, Globe,
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -20,6 +20,7 @@ interface PlatformConfig {
   feishu?: { isConfigured: boolean };
   dify?: { isConfigured: boolean };
   dingtalk?: { isConfigured: boolean };
+  crawlData?: { isConfigured: boolean };
 }
 
 interface TeamMember {
@@ -74,6 +75,7 @@ export default function SettingsPage() {
   const [dingtalkAppKey, setDingtalkAppKey] = useState("");
   const [dingtalkAppSecret, setDingtalkAppSecret] = useState("");
   const [dingtalkUnionId, setDingtalkUnionId] = useState("");
+  const [crawlApiKey, setCrawlApiKey] = useState("");
 
   // Team states
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -160,6 +162,7 @@ export default function SettingsPage() {
       if (dingtalkAppKey) updates.DINGTALK_APP_KEY = dingtalkAppKey;
       if (dingtalkAppSecret) updates.DINGTALK_APP_SECRET = dingtalkAppSecret;
       if (dingtalkUnionId) updates.DINGTALK_UNION_ID = dingtalkUnionId;
+      if (crawlApiKey) updates.CRAWL_DATA_API_KEY = crawlApiKey;
 
       const res = await fetch("/api/config", {
         method: "POST",
@@ -410,6 +413,34 @@ export default function SettingsPage() {
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Union ID（可选）</label>
                   <Input value={dingtalkUnionId} onChange={(e) => setDingtalkUnionId(e.target.value)} placeholder="输入钉钉用户 Union ID" />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Crawl Data API 配置 */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100">
+                    <Globe className="h-4 w-4 text-indigo-600" />
+                  </div>
+                  多平台数据采集
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Badge variant="outline" className={config?.crawlData?.isConfigured ? "border-emerald-300 text-emerald-600" : "border-slate-300 text-slate-400"}>
+                    {config?.crawlData?.isConfigured ? "已配置" : "未配置"}
+                  </Badge>
+                  <span className="text-xs text-slate-400">抖音/小红书/微博/B站等</span>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">API Token</label>
+                  <Input type={showSecrets ? "text" : "password"} value={crawlApiKey} onChange={(e) => setCrawlApiKey(e.target.value)} placeholder={config?.crawlData?.isConfigured ? "已配置（留空保持不变）" : "输入 JustOneAPI Token"} />
+                </div>
+                <div className="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg">
+                  <p className="font-medium text-slate-700 mb-1">支持平台：</p>
+                  <p>抖音、小红书、微博、B站、快手、微信视频号、淘宝、京东、拼多多等 20+ 平台</p>
                 </div>
               </CardContent>
             </Card>
