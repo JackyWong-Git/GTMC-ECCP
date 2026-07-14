@@ -56,7 +56,29 @@ interface DocRecord {
   content: string;
   createdAt: string;
   tags: string[];
+  category?: string;
+  featured?: boolean;
 }
+
+// 分类定义
+interface Category {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  description: string;
+}
+
+// 预定义分类
+const CATEGORIES: Category[] = [
+  { id: 'operations', name: '运营策略', icon: '📊', color: 'bg-blue-100 text-blue-700', description: '运营方法论、增长策略、用户分析' },
+  { id: 'content', name: '内容创作', icon: '✍️', color: 'bg-purple-100 text-purple-700', description: '脚本写作、文案技巧、内容规划' },
+  { id: 'data', name: '数据分析', icon: '📈', color: 'bg-green-100 text-green-700', description: '数据报告、分析方法、指标解读' },
+  { id: 'industry', name: '行业洞察', icon: '🔍', color: 'bg-amber-100 text-amber-700', description: '行业趋势、竞品分析、市场研究' },
+  { id: 'tools', name: '工具教程', icon: '🛠️', color: 'bg-cyan-100 text-cyan-700', description: '工具使用、技术教程、效率提升' },
+  { id: 'cases', name: '案例复盘', icon: '📝', color: 'bg-rose-100 text-rose-700', description: '成功案例、项目复盘、经验总结' },
+  { id: 'other', name: '其他', icon: '📁', color: 'bg-gray-100 text-gray-700', description: '未分类文档' },
+];
 
 interface FeishuSpace {
   spaceId: string;
@@ -74,7 +96,7 @@ interface FeishuNode {
 }
 
 type KnowledgeSource = 'local' | 'feishu' | 'dify' | 'dingtalk';
-type LocalView = 'documents' | 'import' | 'search';
+type LocalView = 'documents' | 'import' | 'search' | 'index';
 
 export default function KnowledgePage() {
   // Auth state
@@ -106,8 +128,12 @@ export default function KnowledgePage() {
   const [importContent, setImportContent] = useState('');
   const [importUrl, setImportUrl] = useState('');
   const [importTags, setImportTags] = useState('');
+  const [importCategory, setImportCategory] = useState('other');
   const [isImporting, setIsImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Featured documents state (stored in localStorage)
+  const [featuredDocIds, setFeaturedDocIds] = useState<string[]>([]);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -128,7 +154,26 @@ export default function KnowledgePage() {
         setRecentImports([]);
       }
     }
+    
+    // Load featured docs
+    const featuredStored = localStorage.getItem('eccp_featured_docs');
+    if (featuredStored) {
+      try {
+        setFeaturedDocIds(JSON.parse(featuredStored));
+      } catch {
+        setFeaturedDocIds([]);
+      }
+    }
   }, []);
+
+  // Toggle featured document
+  const toggleFeatured = (docId: string) => {
+    const updated = featuredDocIds.includes(docId)
+      ? featuredDocIds.filter(id => id !== docId)
+      : [...featuredDocIds, docId];
+    setFeaturedDocIds(updated);
+    localStorage.setItem('eccp_featured_docs', JSON.stringify(updated));
+  };
 
   // Add to recent imports
   const addToRecentImports = (title: string, type: string) => {
@@ -252,8 +297,8 @@ export default function KnowledgePage() {
 
     try {
       const body = importType === 'text'
-        ? { type: 'text', title: importTitle, content: importContent, tags: importTags.split(',').map(t => t.trim()).filter(Boolean) }
-        : { type: 'url', url: importUrl, tags: importTags.split(',').map(t => t.trim()).filter(Boolean) };
+        ? { type: 'text', title: importTitle, content: importContent, tags: importTags.split(',').map(t => t.trim()).filter(Boolean), category: importCategory }
+        : { type: 'url', url: importUrl, tags: importTags.split(',').map(t => t.trim()).filter(Boolean), category: importCategory };
 
       const res = await fetch('/api/knowledge', {
         method: 'POST',
@@ -268,6 +313,7 @@ export default function KnowledgePage() {
         setImportContent('');
         setImportUrl('');
         setImportTags('');
+        setImportCategory('other');
         loadDocuments();
       } else {
         setImportResult({ success: false, message: data.error || '导入失败' });
@@ -609,6 +655,15 @@ export default function KnowledgePage() {
                 <Button
                   variant="outline"
                   size="sm"
+                  onClick={() => setLocalView('index')}
+                  className={localView === 'index' ? 'bg-gray-100' : ''}
+                >
+                  <FolderOpen className="w-4 h-4 mr-1.5" />
+                  索引
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setLocalView('search')}
                   className={localView === 'search' ? 'bg-gray-100' : ''}
                 >
@@ -656,24 +711,28 @@ export default function KnowledgePage() {
                         <thead className="bg-gray-50 border-b border-gray-200">
                           <tr>
                             <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">标题</th>
-                            <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">类型</th>
+                            <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">分类</th>
                             <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">标签</th>
                             <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">创建时间</th>
                             <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">操作</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                          {documents.map((doc) => (
-                            <tr key={doc.id} className="hover:bg-gray-50 transition-colors">
+                          {documents.map((doc) => {
+                            const category = CATEGORIES.find(c => c.id === doc.category) || CATEGORIES[CATEGORIES.length - 1];
+                            const isFeatured = featuredDocIds.includes(doc.id);
+                            return (
+                            <tr key={doc.id} className={`hover:bg-gray-50 transition-colors ${isFeatured ? 'bg-amber-50' : ''}`}>
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-2">
+                                  {isFeatured && <span className="text-amber-500">★</span>}
                                   <FileText className="w-4 h-4 text-gray-400" />
                                   <span className="font-medium text-gray-900 truncate max-w-xs">{doc.title}</span>
                                 </div>
                               </td>
                               <td className="px-4 py-3">
-                                <Badge variant="outline" className="text-xs">
-                                  {doc.type === 'text' ? '文本' : doc.type === 'url' ? 'URL' : '飞书'}
+                                <Badge className={`${category.color} text-xs`}>
+                                  {category.icon} {category.name}
                                 </Badge>
                               </td>
                               <td className="px-4 py-3">
@@ -692,17 +751,29 @@ export default function KnowledgePage() {
                                 {new Date(doc.createdAt).toLocaleDateString('zh-CN')}
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleDelete(doc.id)}
-                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => toggleFeatured(doc.id)}
+                                    className={isFeatured ? 'text-amber-600 hover:text-amber-700 hover:bg-amber-50' : 'text-gray-400 hover:text-gray-600'}
+                                    title={isFeatured ? '取消精选' : '设为精选'}
+                                  >
+                                    {isFeatured ? '★' : '☆'}
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleDelete(doc.id)}
+                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
                               </td>
                             </tr>
-                          ))}
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -779,6 +850,27 @@ export default function KnowledgePage() {
                           onChange={(e) => setImportTags(e.target.value)}
                           placeholder="用逗号分隔，如：产品, 技术, 教程"
                         />
+                      </div>
+
+                      <div>
+                        <label className="text-sm font-medium text-gray-700 mb-1.5 block">分类</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {CATEGORIES.map((cat) => (
+                            <button
+                              key={cat.id}
+                              type="button"
+                              onClick={() => setImportCategory(cat.id)}
+                              className={`flex items-center gap-2 p-2 rounded-lg border text-sm transition-colors ${
+                                importCategory === cat.id
+                                  ? 'border-blue-500 bg-blue-50'
+                                  : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                            >
+                              <span>{cat.icon}</span>
+                              <span className="truncate">{cat.name}</span>
+                            </button>
+                          ))}
+                        </div>
                       </div>
 
                       {importResult && (
@@ -884,6 +976,135 @@ export default function KnowledgePage() {
                       )}
                     </CardContent>
                   </Card>
+                </div>
+              )}
+
+              {localView === 'index' && (
+                <div className="space-y-6">
+                  {/* 精选文档 */}
+                  {featuredDocIds.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <span className="text-amber-500">★</span>
+                          精选文档
+                        </CardTitle>
+                        <CardDescription>标记为精选的重要文档</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {documents
+                            .filter(doc => featuredDocIds.includes(doc.id))
+                            .map((doc) => {
+                              const category = CATEGORIES.find(c => c.id === doc.category) || CATEGORIES[CATEGORIES.length - 1];
+                              return (
+                                <div key={doc.id} className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+                                  <div className="flex items-start gap-2">
+                                    <FileText className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-sm font-medium text-gray-900 truncate">{doc.title}</p>
+                                      <Badge className={`${category.color} text-xs mt-1`}>
+                                        {category.icon} {category.name}
+                                      </Badge>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* 分类统计 */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                    {CATEGORIES.map((cat) => {
+                      const count = documents.filter(d => d.category === cat.id).length;
+                      return (
+                        <div key={cat.id} className="p-3 bg-white rounded-lg border border-gray-200 text-center">
+                          <span className="text-2xl">{cat.icon}</span>
+                          <p className="text-sm font-medium text-gray-900 mt-1">{cat.name}</p>
+                          <p className="text-xs text-gray-500">{count} 篇</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* 按分类展示文档 */}
+                  {CATEGORIES.map((cat) => {
+                    const catDocs = documents.filter(d => d.category === cat.id);
+                    if (catDocs.length === 0) return null;
+                    return (
+                      <Card key={cat.id}>
+                        <CardHeader className="pb-3">
+                          <CardTitle className="flex items-center gap-2 text-base">
+                            <span>{cat.icon}</span>
+                            {cat.name}
+                            <Badge variant="secondary" className="text-xs">{catDocs.length}</Badge>
+                          </CardTitle>
+                          <CardDescription>{cat.description}</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2">
+                            {catDocs.map((doc) => {
+                              const isFeatured = featuredDocIds.includes(doc.id);
+                              return (
+                                <div key={doc.id} className={`flex items-center justify-between p-3 rounded-lg ${isFeatured ? 'bg-amber-50' : 'bg-gray-50'}`}>
+                                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                                    {isFeatured && <span className="text-amber-500">★</span>}
+                                    <FileText className="w-4 h-4 text-gray-400 shrink-0" />
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-sm font-medium truncate">{doc.title}</p>
+                                      <div className="flex items-center gap-2 mt-0.5">
+                                        <span className="text-xs text-gray-500">
+                                          {new Date(doc.createdAt).toLocaleDateString('zh-CN')}
+                                        </span>
+                                        {doc.tags.slice(0, 2).map((tag, i) => (
+                                          <Badge key={i} variant="secondary" className="text-xs">
+                                            {tag}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0 ml-2">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => toggleFeatured(doc.id)}
+                                      className={isFeatured ? 'text-amber-600' : 'text-gray-400'}
+                                    >
+                                      {isFeatured ? '★' : '☆'}
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleDelete(doc.id)}
+                                      className="text-red-600 hover:text-red-700"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+
+                  {documents.length === 0 && (
+                    <div className="text-center py-20">
+                      <FolderOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-1">暂无文档</h3>
+                      <p className="text-gray-500 mb-4">导入文档后将按分类展示在这里</p>
+                      <Button onClick={() => setLocalView('import')}>
+                        <Plus className="w-4 h-4 mr-1.5" />
+                        导入文档
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </>
