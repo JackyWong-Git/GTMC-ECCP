@@ -137,6 +137,27 @@ function WorkflowEditorContent() {
   // Run
   const [running, setRunning] = useState(false);
   const [runResult, setRunResult] = useState<{ success: boolean; output: string } | null>(null);
+  
+  // Execution input dialog
+  const [showInputDialog, setShowInputDialog] = useState(false);
+  const [executionInput, setExecutionInput] = useState('');
+  
+  // Step-by-step execution progress
+  const [executionSteps, setExecutionSteps] = useState<Array<{
+    moduleId: string;
+    moduleName: string;
+    status: 'pending' | 'running' | 'success' | 'error' | 'skipped';
+    output?: string;
+    error?: string;
+    duration?: number;
+  }>>([]);
+  const [showExecutionPanel, setShowExecutionPanel] = useState(false);
+  
+  // Batch execution
+  const [showBatchDialog, setShowBatchDialog] = useState(false);
+  const [batchInputs, setBatchInputs] = useState<string[]>(['']);
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [batchResults, setBatchResults] = useState<Array<{ input: string; success: boolean; output: string }>>([]);
 
   // Load templates
   useEffect(() => {
@@ -223,17 +244,139 @@ function WorkflowEditorContent() {
 
   const handleRun = async () => {
     if (!editId) { setMessage({ type: 'error', text: '请先保存工作流再执行' }); return; }
+    setShowInputDialog(true);
+  };
+
+  const executeWorkflow = async (input: string) => {
+    setShowInputDialog(false);
     setRunning(true);
     setRunResult(null);
+    setShowExecutionPanel(true);
+    
+    // Initialize execution steps from nodes
+    const enabledNodes = nodes.filter(n => n.enabled);
+    setExecutionSteps(enabledNodes.map(n => ({
+      moduleId: n.id,
+      moduleName: n.name,
+      status: 'pending' as const,
+    })));
+
     try {
-      const res = await fetch('/api/workflows/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ workflowId: editId, input: '请开始执行工作流' }) });
+      const res = await fetch('/api/workflows/run', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ workflowId: editId, input: input || '请开始执行工作流' }) 
+      });
       const data = await res.json();
+      
       if (data.success) {
+        // Update execution steps with results
+        const moduleResults = data.data.moduleResults || [];
+        setExecutionSteps(prev => prev.map((step, idx) => {
+          const result = moduleResults.find((r: { moduleId: string }) => r.moduleId === step.moduleId);
+          if (result) {
+            return {
+              ...step,
+              status: result.status === 'success' ? 'success' : 'error',
+              output: result.output,
+              error: result.error,
+              duration: result.duration,
+            };
+          }
+          // Mark remaining steps as skipped if there was an error
+          const hasError = moduleResults.some((r: { status: string }) => r.status === 'error');
+          if (hasError && idx > moduleResults.length - 1) {
+            return { ...step, status: 'skipped' as const };
+          }
+          return step;
+        }));
         setRunResult({ success: true, output: data.data.finalOutput || '执行完成' });
       } else {
         setRunResult({ success: false, output: data.error || '执行失败' });
       }
-    } catch { setRunResult({ success: false, output: '请求失败' }); } finally { setRunning(false); }
+    } catch { 
+      setRunResult({ success: false, output: '请求失败' }); 
+    } finally { 
+      setRunning(false); 
+    }
+  };
+
+  const handleRetryStep = async (moduleId: string) => {
+    // Find the module and re-execute from that point
+    const stepIndex = executionSteps.findIndex(s => s.moduleId === moduleId);
+    if (stepIndex < 0) return;
+    
+    // Reset this step and all subsequent steps
+    setExecutionSteps(prev => prev.map((step, idx) => {
+      if (idx >= stepIndex) {
+        return { ...step, status: 'pending' as const, output: undefined, error: undefined };
+      }
+      return step;
+    }));
+    
+    // Re-run the workflow
+    setRunning(true);
+    try {
+      const res = await fetch('/api/workflows/run', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ workflowId: editId, input: executionInput || '请开始执行工作流' }) 
+      });
+      const data = await res.json();
+      
+      if (data.success) {
+        const moduleResults = data.data.moduleResults || [];
+        setExecutionSteps(prev => prev.map((step) => {
+          const result = moduleResults.find((r: { moduleId: string }) => r.moduleId === step.moduleId);
+          if (result) {
+            return {
+              ...step,
+              status: result.status === 'success' ? 'success' : 'error',
+              output: result.output,
+              error: result.error,
+              duration: result.duration,
+            };
+          }
+          return step;
+        }));
+        setRunResult({ success: true, output: data.data.finalOutput || '执行完成' });
+      }
+    } catch { /* ignore */ } finally { setRunning(false); }
+  };
+
+  const handleBatchRun = async () => {
+    if (!editId) { setMessage({ type: 'error', text: '请先保存工作流再执行' }); return; }
+    setShowBatchDialog(true);
+  };
+
+  const executeBatch = async () => {
+    setShowBatchDialog(false);
+    setBatchRunning(true);
+    setBatchResults([]);
+    setShowExecutionPanel(true);
+
+    const validInputs = batchInputs.filter(i => i.trim());
+    const results: Array<{ input: string; success: boolean; output: string }> = [];
+
+    for (const input of validInputs) {
+      try {
+        const res = await fetch('/api/workflows/run', { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify({ workflowId: editId, input }) 
+        });
+        const data = await res.json();
+        results.push({
+          input,
+          success: data.success,
+          output: data.success ? (data.data.finalOutput || '执行完成') : (data.error || '执行失败'),
+        });
+      } catch {
+        results.push({ input, success: false, output: '请求失败' });
+      }
+      setBatchResults([...results]);
+    }
+    setBatchRunning(false);
   };
 
   // AI Assistant
@@ -325,6 +468,10 @@ function WorkflowEditorContent() {
           <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleRun} disabled={running || nodes.length === 0}>
             {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
             执行
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleBatchRun} disabled={running || batchRunning || nodes.length === 0}>
+            {batchRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+            批量
           </Button>
           <Button size="sm" className="gap-1.5 text-xs bg-[#0F172A] text-white hover:bg-slate-800" onClick={handleSave} disabled={saving}>
             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
@@ -670,6 +817,219 @@ function WorkflowEditorContent() {
           )}
         </div>
       </div>
+
+      {/* Execution Input Dialog */}
+      {showInputDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-[480px] max-h-[80vh] overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+              <div className="flex items-center gap-2">
+                <Play className="w-4 h-4 text-emerald-600" />
+                <h3 className="text-sm font-semibold text-slate-800">执行工作流</h3>
+              </div>
+              <button onClick={() => setShowInputDialog(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="text-xs font-medium text-slate-600 mb-2 block">输入数据</label>
+                <textarea
+                  value={executionInput}
+                  onChange={(e) => setExecutionInput(e.target.value)}
+                  placeholder="请输入工作流的初始数据，例如：&#10;- 一个选题标题&#10;- 一段需要分析的文本&#10;- 一个搜索关键词"
+                  className="w-full px-3 py-2.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 min-h-[120px] resize-y"
+                />
+              </div>
+              <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                <ChevronRight className="w-3 h-3" />
+                <span>工作流将按顺序执行 {nodes.filter(n => n.enabled).length} 个启用的节点</span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 bg-slate-50">
+              <Button variant="outline" size="sm" className="text-xs gap-1.5" onClick={handleBatchRun}>
+                <Zap className="w-3.5 h-3.5" />
+                批量执行
+              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="text-xs" onClick={() => setShowInputDialog(false)}>
+                  取消
+                </Button>
+                <Button size="sm" className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5" onClick={() => executeWorkflow(executionInput)}>
+                  <Play className="w-3.5 h-3.5" />
+                  开始执行
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Execution Dialog */}
+      {showBatchDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-[520px] max-h-[80vh] overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+              <div className="flex items-center gap-2">
+                <Zap className="w-4 h-4 text-amber-600" />
+                <h3 className="text-sm font-semibold text-slate-800">批量执行</h3>
+              </div>
+              <button onClick={() => setShowBatchDialog(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-3 max-h-[50vh] overflow-y-auto">
+              <p className="text-xs text-slate-500">为每个输入添加一行数据，工作流将依次执行：</p>
+              {batchInputs.map((input, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <span className="text-[10px] text-slate-400 w-5 text-center">{idx + 1}</span>
+                  <input
+                    value={input}
+                    onChange={(e) => {
+                      const newInputs = [...batchInputs];
+                      newInputs[idx] = e.target.value;
+                      setBatchInputs(newInputs);
+                    }}
+                    placeholder={`输入数据 ${idx + 1}`}
+                    className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  />
+                  {batchInputs.length > 1 && (
+                    <button
+                      onClick={() => setBatchInputs(batchInputs.filter((_, i) => i !== idx))}
+                      className="text-slate-400 hover:text-red-500"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                onClick={() => setBatchInputs([...batchInputs, ''])}
+                className="w-full py-2 text-xs text-blue-600 border border-dashed border-blue-200 rounded-lg hover:bg-blue-50"
+              >
+                + 添加输入
+              </button>
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200 bg-slate-50">
+              <Button variant="outline" size="sm" className="text-xs" onClick={() => setShowBatchDialog(false)}>
+                取消
+              </Button>
+              <Button size="sm" className="text-xs bg-amber-600 hover:bg-amber-700 text-white gap-1.5" onClick={executeBatch}>
+                <Zap className="w-3.5 h-3.5" />
+                批量执行 ({batchInputs.filter(i => i.trim()).length} 项)
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Execution Progress Panel */}
+      {showExecutionPanel && (
+        <div className="fixed bottom-4 right-4 w-96 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden z-40">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
+            <div className="flex items-center gap-2">
+              {running ? (
+                <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+              ) : runResult?.success ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-red-600" />
+              )}
+              <span className="text-xs font-semibold text-slate-800">
+                {running ? '执行中...' : runResult?.success ? '执行完成' : '执行失败'}
+              </span>
+            </div>
+            <button onClick={() => setShowExecutionPanel(false)} className="text-slate-400 hover:text-slate-600">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          
+          {/* Step-by-step progress */}
+          <div className="max-h-64 overflow-y-auto p-3 space-y-2">
+            {executionSteps.map((step, idx) => (
+              <div key={step.moduleId} className="flex items-start gap-2">
+                <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+                  step.status === 'success' ? 'bg-emerald-100' :
+                  step.status === 'error' ? 'bg-red-100' :
+                  step.status === 'running' ? 'bg-blue-100' :
+                  step.status === 'skipped' ? 'bg-slate-100' :
+                  'bg-slate-50'
+                }`}>
+                  {step.status === 'success' ? (
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  ) : step.status === 'error' ? (
+                    <AlertCircle className="w-3 h-3 text-red-600" />
+                  ) : step.status === 'running' ? (
+                    <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
+                  ) : (
+                    <span className="text-[9px] text-slate-400">{idx + 1}</span>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className={`text-[11px] font-medium truncate ${
+                      step.status === 'skipped' ? 'text-slate-400' : 'text-slate-700'
+                    }`}>
+                      {step.moduleName}
+                    </span>
+                    {step.duration && (
+                      <span className="text-[9px] text-slate-400 ml-2">{step.duration}ms</span>
+                    )}
+                  </div>
+                  {step.error && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <span className="text-[9px] text-red-500 truncate">{step.error}</span>
+                      <button
+                        onClick={() => handleRetryStep(step.moduleId)}
+                        className="text-[9px] text-blue-600 hover:underline shrink-0"
+                      >
+                        重试
+                      </button>
+                    </div>
+                  )}
+                  {step.output && step.status === 'success' && (
+                    <p className="text-[9px] text-slate-400 truncate mt-0.5">{step.output.slice(0, 60)}...</p>
+                  )}
+                </div>
+              </div>
+            ))}
+            
+            {/* Batch results */}
+            {batchResults.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-slate-200">
+                <p className="text-[10px] font-medium text-slate-600 mb-2">批量执行结果</p>
+                {batchResults.map((result, idx) => (
+                  <div key={idx} className="flex items-start gap-2 mb-2">
+                    <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${
+                      result.success ? 'bg-emerald-100' : 'bg-red-100'
+                    }`}>
+                      {result.success ? (
+                        <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+                      ) : (
+                        <AlertCircle className="w-2.5 h-2.5 text-red-600" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] text-slate-600 truncate">{result.input}</p>
+                      <p className="text-[9px] text-slate-400 truncate">{result.output.slice(0, 50)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          {/* Final output */}
+          {runResult && (
+            <div className="px-4 py-3 border-t border-slate-200 bg-slate-50">
+              <p className="text-[10px] font-medium text-slate-600 mb-1">最终输出</p>
+              <pre className="text-[9px] text-slate-500 whitespace-pre-wrap max-h-20 overflow-y-auto">
+                {runResult.output.slice(0, 500)}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
