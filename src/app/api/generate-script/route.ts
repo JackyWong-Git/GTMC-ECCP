@@ -39,18 +39,19 @@ async function saveToKnowledge(
  * POST /api/generate-script
  * 脚本大纲生成 — 使用 qwen-3-5-plus（核心创作，流式输出）
  *
- * 请求体: { topicTitle: string, platform: string, style?: string, duration?: string }
+ * 请求体: { topicTitle: string, platform: string, style?: string, duration?: string, mrbeastMode?: boolean }
  * 返回: SSE 流式响应
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { topicTitle, platform, style, duration, systemPrompt } = body as {
+    const { topicTitle, platform, style, duration, systemPrompt, mrbeastMode } = body as {
       topicTitle: string;
       platform: string;
       style?: string;
       duration?: string;
       systemPrompt?: string;
+      mrbeastMode?: boolean;
     };
 
     if (!topicTitle || !platform) {
@@ -64,7 +65,21 @@ export async function POST(request: NextRequest) {
     const config = new Config();
     const client = new LLMClient(config, customHeaders);
 
-    const userContent = `请为以下选题生成视频脚本大纲：
+    // MrBeast 模式：使用增强版 prompt，要求输出标题/缩略图/Hook 结构
+    const effectiveSystemPrompt = mrbeastMode
+      ? SYSTEM_PROMPTS.MRBEAST_SCRIPT_GENERATION
+      : (systemPrompt || SYSTEM_PROMPTS.SCRIPT_GENERATION);
+
+    const userContent = mrbeastMode
+      ? `请为以下选题生成视频脚本大纲（使用 MrBeast 方法论）：
+
+选题名称：${topicTitle}
+目标平台：${platform}
+${style ? `风格要求：${style}` : '风格要求：轻松口语化，节奏快，信息密度高'}
+${duration ? `视频时长：${duration}` : '视频时长：3-5分钟'}
+
+请严格按照 MrBeast 方法论生成完整脚本，包含：推荐标题（3个备选）、缩略图建议、前30秒Hook结构、阶梯递进的内容主体、高潮点设计、结尾引导和拍摄建议。`
+      : `请为以下选题生成视频脚本大纲：
 
 选题名称：${topicTitle}
 目标平台：${platform}
@@ -74,7 +89,7 @@ ${duration ? `视频时长：${duration}` : '视频时长：3-5分钟'}
 请生成一份完整的、可直接用于拍摄的视频脚本大纲。`;
 
     const messages = [
-      { role: 'system' as const, content: systemPrompt || SYSTEM_PROMPTS.SCRIPT_GENERATION },
+      { role: 'system' as const, content: effectiveSystemPrompt },
       { role: 'user' as const, content: userContent },
     ];
 

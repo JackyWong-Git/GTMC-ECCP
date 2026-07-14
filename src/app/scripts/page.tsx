@@ -135,6 +135,8 @@ export default function ScriptsPage() {
   const [isScraping, setIsScraping] = useState(false);
   const [scrapeResult, setScrapeResult] = useState('');
   const [activeTab, setActiveTab] = useState<'create' | 'scrape'>('create');
+  const [mrbeastMode, setMrbeastMode] = useState(false);
+  const [showFormulas, setShowFormulas] = useState(false);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadedFileName, setUploadedFileName] = useState('');
@@ -303,6 +305,7 @@ export default function ScriptsPage() {
           style: selectedPreset.style,
           duration: '3-5分钟',
           systemPrompt: selectedPreset.prompt,
+          mrbeastMode,
         }),
       });
 
@@ -375,7 +378,7 @@ export default function ScriptsPage() {
     } finally {
       setIsGenerating(false);
     }
-  }, [topicTitle, platform, selectedPreset]);
+  }, [topicTitle, platform, selectedPreset, mrbeastMode]);
 
   // 继续生成（当内容不完整时）
   const handleContinueGenerate = useCallback(async () => {
@@ -972,6 +975,93 @@ ${agentStyleGuide}
                 {isGenerating ? '生成中...' : '生成脚本'}
               </Button>
             </div>
+
+            {/* MrBeast 模式开关 + 公式参考 */}
+            <div className="mt-3 flex items-center gap-3">
+              <button
+                onClick={() => setMrbeastMode(!mrbeastMode)}
+                className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
+                  mrbeastMode
+                    ? 'border-amber-300 bg-amber-50 text-amber-700 ring-1 ring-amber-200'
+                    : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <span className={`inline-block h-2 w-2 rounded-full ${mrbeastMode ? 'bg-amber-500' : 'bg-slate-300'}`} />
+                MrBeast 方法论
+              </button>
+              {mrbeastMode && (
+                <button
+                  onClick={() => setShowFormulas(!showFormulas)}
+                  className="flex items-center gap-1 text-xs text-slate-400 hover:text-violet-600 transition-colors"
+                >
+                  <BookOpen className="h-3 w-3" />
+                  {showFormulas ? '收起公式参考' : '查看公式参考'}
+                </button>
+              )}
+              {mrbeastMode && (
+                <span className="text-[10px] text-amber-600/70">
+                  将使用标题公式 + 缩略图三要素 + Hook 结构 + 阶梯递进生成脚本
+                </span>
+              )}
+            </div>
+
+            {/* MrBeast 公式参考面板 */}
+            {mrbeastMode && showFormulas && (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/50 p-4">
+                <div className="grid grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <h4 className="mb-2 font-semibold text-amber-800">标题公式（5种高频模式）</h4>
+                    <div className="space-y-1.5">
+                      <div className="flex items-start gap-2">
+                        <Badge variant="outline" className="shrink-0 border-amber-300 text-amber-700 text-[9px]">金钱锚定</Badge>
+                        <span className="text-slate-600">¥[数字] + [动作/对象]</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <Badge variant="outline" className="shrink-0 border-amber-300 text-amber-700 text-[9px]">挑战</Badge>
+                        <span className="text-slate-600">我[极端动作]了[时间/条件]</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <Badge variant="outline" className="shrink-0 border-amber-300 text-amber-700 text-[9px]">时间压力</Badge>
+                        <span className="text-slate-600">[时间] + [挑战]</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <Badge variant="outline" className="shrink-0 border-amber-300 text-amber-700 text-[9px]">极端对比</Badge>
+                        <span className="text-slate-600">[小] vs [大]</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <Badge variant="outline" className="shrink-0 border-amber-300 text-amber-700 text-[9px]">情感触发</Badge>
+                        <span className="text-slate-600">我[慈善/感人行为]</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="mb-2 font-semibold text-amber-800">前30秒 Hook 结构</h4>
+                    <div className="space-y-1.5 text-slate-600">
+                      <div><span className="font-medium text-amber-700">0-3秒</span> 概念即画面（视觉化展示核心概念）</div>
+                      <div><span className="font-medium text-amber-700">3-8秒</span> 赌注声明（&quot;如果失败，XX就会发生&quot;）</div>
+                      <div><span className="font-medium text-amber-700">8-15秒</span> 视觉预告（快速闪过最精彩画面）</div>
+                      <div><span className="font-medium text-amber-700">15-30秒</span> 立即开始行动（不铺垫不解释）</div>
+                    </div>
+                    <h4 className="mt-3 mb-2 font-semibold text-amber-800">缩略图三要素</h4>
+                    <div className="space-y-1 text-slate-600">
+                      <div>1. 一张脸（带明确情绪表情）</div>
+                      <div>2. 一个物体（视觉焦点）</div>
+                      <div>3. 一个问题（看到就想知道&quot;怎么回事？&quot;）</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3 border-t border-amber-200 pt-3">
+                  <h4 className="mb-1.5 font-semibold text-amber-800">核心公式</h4>
+                  <div className="flex items-center gap-4 text-slate-600">
+                    <span><span className="font-medium text-amber-700">视频成功</span> = CTR x AVD</span>
+                    <span className="text-amber-300">|</span>
+                    <span><span className="font-medium text-amber-700">病毒度</span> = 概念简单度 x 执行极端度</span>
+                    <span className="text-amber-300">|</span>
+                    <span><span className="font-medium text-amber-700">阶梯递进</span> 每段比前一段更大、赌注更高</span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Streaming Output */}
             {(streamContent || isGenerating) && (
