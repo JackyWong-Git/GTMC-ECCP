@@ -6,24 +6,42 @@ const DATASET_NAME = DEFAULT_KNOWLEDGE_DATASET;
 
 /**
  * GET /api/knowledge
- * 搜索知识库文档
+ * 搜索知识库文档或列出所有文档
+ * Query params:
+ *   - action=list: 列出所有文档
+ *   - q=xxx: 搜索文档
  */
 export async function GET(request: NextRequest) {
   try {
     setupLLMEnv();
     const { searchParams } = new URL(request.url);
+    const action = searchParams.get("action");
     const query = searchParams.get("q");
     const topK = parseInt(searchParams.get("topK") || "10", 10);
 
+    const config = new Config();
+    const client = new KnowledgeClient(config);
+
+    // 列出所有文档
+    // 注意：KnowledgeClient 不支持 listDocuments 方法，返回空列表
+    if (action === "list") {
+      return NextResponse.json({
+        success: true,
+        data: {
+          documents: [],
+          total: 0,
+          message: "知识库文档列表功能暂不可用，请使用搜索功能查找文档",
+        },
+      });
+    }
+
+    // 搜索文档
     if (!query) {
       return NextResponse.json(
         { error: "缺少搜索关键词参数 q" },
         { status: 400 }
       );
     }
-
-    const config = new Config();
-    const client = new KnowledgeClient(config);
 
     const response = await client.search(query, undefined, topK, 0.0);
 

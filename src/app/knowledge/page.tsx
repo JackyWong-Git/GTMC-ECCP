@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
 import {
   BookOpen,
   Search,
@@ -76,6 +77,21 @@ type KnowledgeSource = 'local' | 'feishu' | 'dify' | 'dingtalk';
 type LocalView = 'documents' | 'import' | 'search';
 
 export default function KnowledgePage() {
+  // Auth state
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+
+  // Initialize auth
+  useEffect(() => {
+    const initAuth = async () => {
+      const supabase = getSupabaseBrowserClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        setAccessToken(session.access_token);
+      }
+    };
+    initAuth();
+  }, []);
+
   // Navigation state
   const [activeSource, setActiveSource] = useState<KnowledgeSource>('local');
   const [localView, setLocalView] = useState<LocalView>('documents');
@@ -124,13 +140,20 @@ export default function KnowledgePage() {
 
   // Create topic from search result
   const handleCreateTopicFromSearch = async (content: string) => {
+    if (!accessToken) {
+      alert('请先登录');
+      return;
+    }
     try {
       // Extract first 50 chars as title
       const title = content.slice(0, 50) + (content.length > 50 ? '...' : '');
       
       const response = await fetch('/api/topics', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-session': accessToken,
+        },
         body: JSON.stringify({
           title,
           description: content.slice(0, 500),
@@ -206,7 +229,7 @@ export default function KnowledgePage() {
       const res = await fetch('/api/knowledge?action=list');
       const data = await res.json();
       if (data.success) {
-        setDocuments(data.data || []);
+        setDocuments(data.data.documents || []);
       }
     } catch (error) {
       console.error('Failed to load documents:', error);

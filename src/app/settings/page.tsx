@@ -17,6 +17,9 @@ import {
   Video,
   Sparkles,
   BookOpen,
+  FileText,
+  Zap,
+  MessageSquare,
 } from "lucide-react";
 
 interface ConfigData {
@@ -29,6 +32,22 @@ interface ConfigData {
   llm: {
     apiKey: string;
     baseUrl: string;
+    isConfigured: boolean;
+  };
+  feishu: {
+    appId: string;
+    appSecret: string;
+    isConfigured: boolean;
+  };
+  dify: {
+    apiKey: string;
+    baseUrl: string;
+    isConfigured: boolean;
+  };
+  dingtalk: {
+    appKey: string;
+    appSecret: string;
+    unionId: string;
     isConfigured: boolean;
   };
 }
@@ -46,6 +65,13 @@ export default function SettingsPage() {
   const [douyinRedirect, setDouyinRedirect] = useState("");
   const [llmApiKey, setLlmApiKey] = useState("");
   const [llmBaseUrl, setLlmBaseUrl] = useState("");
+  const [feishuAppId, setFeishuAppId] = useState("");
+  const [feishuAppSecret, setFeishuAppSecret] = useState("");
+  const [difyApiKey, setDifyApiKey] = useState("");
+  const [difyBaseUrl, setDifyBaseUrl] = useState("");
+  const [dingtalkAppKey, setDingtalkAppKey] = useState("");
+  const [dingtalkAppSecret, setDingtalkAppSecret] = useState("");
+  const [dingtalkUnionId, setDingtalkUnionId] = useState("");
 
   // 加载配置
   useEffect(() => {
@@ -56,6 +82,8 @@ export default function SettingsPage() {
           setConfig(data.data);
           setDouyinRedirect(data.data.douyin?.redirectUri || "");
           setLlmBaseUrl(data.data.llm?.baseUrl || "");
+          setDifyBaseUrl(data.data.dify?.baseUrl || "");
+          setDingtalkUnionId(data.data.dingtalk?.unionId || "");
         }
       })
       .catch(() => {})
@@ -82,6 +110,28 @@ export default function SettingsPage() {
         body.llm = {
           apiKey: llmApiKey || undefined,
           baseUrl: llmBaseUrl || undefined,
+        };
+      }
+
+      if (feishuAppId || feishuAppSecret) {
+        body.feishu = {
+          appId: feishuAppId || undefined,
+          appSecret: feishuAppSecret || undefined,
+        };
+      }
+
+      if (difyApiKey || difyBaseUrl) {
+        body.dify = {
+          apiKey: difyApiKey || undefined,
+          baseUrl: difyBaseUrl || undefined,
+        };
+      }
+
+      if (dingtalkAppKey || dingtalkAppSecret || dingtalkUnionId) {
+        body.dingtalk = {
+          appKey: dingtalkAppKey || undefined,
+          appSecret: dingtalkAppSecret || undefined,
+          unionId: dingtalkUnionId || undefined,
         };
       }
 
@@ -196,6 +246,146 @@ export default function SettingsPage() {
                 value={llmBaseUrl}
                 onChange={(e) => setLlmBaseUrl(e.target.value)}
                 placeholder="自定义 API 地址（留空使用默认）"
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 飞书配置 */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100">
+                <FileText className="h-4 w-4 text-blue-600" />
+              </div>
+              飞书知识库
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Badge variant="outline" className={config?.feishu?.isConfigured ? "border-emerald-300 text-emerald-600" : "border-slate-300 text-slate-400"}>
+                {config?.feishu?.isConfigured ? "已配置" : "未配置"}
+              </Badge>
+              <span className="text-xs text-slate-400">飞书多维表格、云文档集成</span>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                App ID
+              </label>
+              <Input
+                value={feishuAppId}
+                onChange={(e) => setFeishuAppId(e.target.value)}
+                placeholder={config?.feishu?.isConfigured ? "已配置（留空保持不变）" : "输入飞书应用 App ID"}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                App Secret
+              </label>
+              <Input
+                type={showSecrets ? "text" : "password"}
+                value={feishuAppSecret}
+                onChange={(e) => setFeishuAppSecret(e.target.value)}
+                placeholder={config?.feishu?.isConfigured ? "已配置（留空保持不变）" : "输入飞书应用 App Secret"}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Dify 配置 */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-100">
+                <Zap className="h-4 w-4 text-purple-600" />
+              </div>
+              Dify 知识库
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Badge variant="outline" className={config?.dify?.isConfigured ? "border-emerald-300 text-emerald-600" : "border-slate-300 text-slate-400"}>
+                {config?.dify?.isConfigured ? "已配置" : "未配置"}
+              </Badge>
+              <span className="text-xs text-slate-400">Dify 知识库 API 集成</span>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                API Key
+              </label>
+              <Input
+                type={showSecrets ? "text" : "password"}
+                value={difyApiKey}
+                onChange={(e) => setDifyApiKey(e.target.value)}
+                placeholder={config?.dify?.isConfigured ? "已配置（留空保持不变）" : "输入 Dify API Key"}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Base URL（可选）
+              </label>
+              <Input
+                value={difyBaseUrl}
+                onChange={(e) => setDifyBaseUrl(e.target.value)}
+                placeholder="https://api.dify.ai/v1"
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 钉钉配置 */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-100">
+                <MessageSquare className="h-4 w-4 text-orange-600" />
+              </div>
+              钉钉知识库
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Badge variant="outline" className={config?.dingtalk?.isConfigured ? "border-emerald-300 text-emerald-600" : "border-slate-300 text-slate-400"}>
+                {config?.dingtalk?.isConfigured ? "已配置" : "未配置"}
+              </Badge>
+              <span className="text-xs text-slate-400">钉钉文档、群消息集成</span>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                App Key
+              </label>
+              <Input
+                value={dingtalkAppKey}
+                onChange={(e) => setDingtalkAppKey(e.target.value)}
+                placeholder={config?.dingtalk?.isConfigured ? "已配置（留空保持不变）" : "输入钉钉应用 App Key"}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                App Secret
+              </label>
+              <Input
+                type={showSecrets ? "text" : "password"}
+                value={dingtalkAppSecret}
+                onChange={(e) => setDingtalkAppSecret(e.target.value)}
+                placeholder={config?.dingtalk?.isConfigured ? "已配置（留空保持不变）" : "输入钉钉应用 App Secret"}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Union ID（可选）
+              </label>
+              <Input
+                value={dingtalkUnionId}
+                onChange={(e) => setDingtalkUnionId(e.target.value)}
+                placeholder="输入钉钉用户 Union ID"
               />
             </div>
           </CardContent>
