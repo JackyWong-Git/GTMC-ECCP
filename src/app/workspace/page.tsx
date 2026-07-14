@@ -34,8 +34,6 @@ import {
   Globe,
   Database,
   X,
-  Video,
-  Play,
 } from 'lucide-react';
 
 // Topic status flow
@@ -109,12 +107,6 @@ export default function WorkspacePage() {
   const [hotTopics, setHotTopics] = useState<Array<{ title: string; hotValue: number; source: string }>>([]);
   const [isLoadingHotTopics, setIsLoadingHotTopics] = useState(false);
 
-  // Video learning state
-  const [showVideoLearn, setShowVideoLearn] = useState(false);
-  const [videoUrl, setVideoUrl] = useState('');
-  const [videoTranscript, setVideoTranscript] = useState('');
-  const [isTranscribing, setIsTranscribing] = useState(false);
-
   // Auth-aware fetch
   const authFetch = useCallback((url: string, options: RequestInit = {}) => {
     const headers = new Headers(options.headers || {});
@@ -175,54 +167,6 @@ export default function WorkspacePage() {
     setNewDescription(`来自${hotTopic.source}热榜，热度 ${hotTopic.hotValue.toLocaleString()}`);
     setShowHotTopics(false);
     setShowCreateModal(true);
-  };
-
-  // Fetch video transcript
-  const handleFetchTranscript = async () => {
-    if (!videoUrl.trim()) {
-      toast.error('请输入视频链接');
-      return;
-    }
-
-    setIsTranscribing(true);
-    setVideoTranscript('');
-
-    try {
-      const response = await authFetch('/api/video-transcript', {
-        method: 'POST',
-        body: JSON.stringify({ url: videoUrl }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.data?.transcript) {
-          setVideoTranscript(data.data.transcript);
-          toast.success('视频转写完成');
-        } else {
-          toast.error(data.error || '转写失败');
-        }
-      } else {
-        const error = await response.json();
-        toast.error(error.error || '转写失败');
-      }
-    } catch (error) {
-      console.error('Transcript error:', error);
-      toast.error('视频转写失败');
-    } finally {
-      setIsTranscribing(false);
-    }
-  };
-
-  // Use transcript as inspiration for current topic
-  const handleUseTranscript = () => {
-    if (!videoTranscript || !selectedTopic) {
-      toast.error('请先选择选题并完成视频转写');
-      return;
-    }
-    // Prepend transcript context to the generation
-    setGeneratedContent(`【参考素材 - 来自视频学习】\n${videoTranscript.slice(0, 500)}...\n\n---\n\n`);
-    setShowVideoLearn(false);
-    toast.success('已添加参考素材，点击生成开始创作');
   };
 
   // Initialize
@@ -838,17 +782,7 @@ export default function WorkspacePage() {
                 </div>
 
                 {/* Mode Toggle */}
-                <div className="flex items-center gap-3">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setShowVideoLearn(true)}
-                    className="border-purple-200 text-purple-700 hover:bg-purple-50"
-                  >
-                    <Video className="h-4 w-4 mr-1" />
-                    从视频学习
-                  </Button>
-                  <div className="flex rounded-lg border border-slate-200 p-1">
+                <div className="flex rounded-lg border border-slate-200 p-1">
                   <button
                     onClick={() => setCreationMode('script')}
                     className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
@@ -871,7 +805,6 @@ export default function WorkspacePage() {
                     <FileText className="h-4 w-4" />
                     文章
                   </button>
-                </div>
                 </div>
               </div>
 
@@ -1021,107 +954,6 @@ export default function WorkspacePage() {
                   创建
                 </Button>
               </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Video Learn Modal */}
-      {showVideoLearn && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <Card className="w-full max-w-2xl max-h-[80vh] flex flex-col">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Video className="h-5 w-5 text-purple-600" />
-                  从视频学习
-                </CardTitle>
-                <p className="text-sm text-slate-500 mt-1">
-                  粘贴竞品视频链接，AI 将提取文案作为创作参考
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  setShowVideoLearn(false);
-                  setVideoUrl('');
-                  setVideoTranscript('');
-                }}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </CardHeader>
-            <CardContent className="flex-1 overflow-y-auto space-y-4">
-              {/* URL Input */}
-              <div className="flex gap-2">
-                <Input
-                  value={videoUrl}
-                  onChange={(e) => setVideoUrl(e.target.value)}
-                  placeholder="粘贴视频链接（支持抖音分享链接、直链等）"
-                  className="flex-1"
-                />
-                <Button
-                  onClick={handleFetchTranscript}
-                  disabled={isTranscribing || !videoUrl.trim()}
-                >
-                  {isTranscribing ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                      转写中
-                    </>
-                  ) : (
-                    <>
-                      <Play className="h-4 w-4 mr-1" />
-                      提取文案
-                    </>
-                  )}
-                </Button>
-              </div>
-
-              {/* Supported platforms hint */}
-              <div className="flex flex-wrap gap-2">
-                {['抖音', '快手', 'B站', '小红书', '视频号'].map(platform => (
-                  <Badge key={platform} variant="outline" className="text-xs">
-                    {platform}
-                  </Badge>
-                ))}
-              </div>
-
-              {/* Transcript Result */}
-              {videoTranscript && (
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-slate-700">提取的文案</span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        navigator.clipboard.writeText(videoTranscript);
-                        toast.success('已复制');
-                      }}
-                    >
-                      <Copy className="h-3 w-3 mr-1" />
-                      复制
-                    </Button>
-                  </div>
-                  <div className="max-h-64 overflow-y-auto">
-                    <p className="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">
-                      {videoTranscript}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Use as inspiration */}
-              {videoTranscript && selectedTopic && (
-                <Button
-                  className="w-full"
-                  onClick={handleUseTranscript}
-                >
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  用作「{selectedTopic.title}」的创作参考
-                </Button>
-              )}
             </CardContent>
           </Card>
         </div>
