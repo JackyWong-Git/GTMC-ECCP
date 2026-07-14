@@ -19,7 +19,28 @@ import {
   AlertCircle,
   CheckCircle2,
   Loader2,
+  Sparkles,
+  Target,
+  Zap,
+  Lightbulb,
 } from "lucide-react";
+
+// 爆款分析结果类型
+interface ViralAnalysisResult {
+  选题角度?: string;
+  钩子?: string;
+  结构?: string;
+  "爆点·数据证据"?: string;
+  CTA?: string;
+  可抄点?: string;
+  脚本类型?: string;
+  爆款元素?: string;
+  情绪波动点?: string;
+  画面感?: string | number;
+  力量感?: string | number;
+  人设类型?: string;
+  运营建议?: string;
+}
 
 // 平台数据类型
 interface PlatformData {
@@ -89,6 +110,18 @@ export default function AnalyticsPage() {
   const [importPlatform, setImportPlatform] = useState("");
   const [importText, setImportText] = useState("");
   const [importError, setImportError] = useState("");
+
+  // 爆款分析状态
+  const [viralModalOpen, setViralModalOpen] = useState(false);
+  const [viralVideo, setViralVideo] = useState<{
+    title: string;
+    likes: number;
+    comments: number;
+  } | null>(null);
+  const [viralTranscript, setViralTranscript] = useState("");
+  const [viralMode, setViralMode] = useState<"six" | "seven">("six");
+  const [viralAnalyzing, setViralAnalyzing] = useState(false);
+  const [viralResult, setViralResult] = useState<ViralAnalysisResult | null>(null);
 
   // 检查抖音登录状态
   useEffect(() => {
@@ -218,6 +251,47 @@ export default function AnalyticsPage() {
     } catch {
       setImportError("导入失败，请检查数据格式");
     }
+  };
+
+  // 爆款分析
+  const handleViralAnalysis = async () => {
+    if (!viralVideo || !viralTranscript.trim()) return;
+
+    setViralAnalyzing(true);
+    setViralResult(null);
+
+    try {
+      const res = await fetch("/api/viral-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: viralVideo.title,
+          transcript: viralTranscript,
+          like: viralVideo.likes,
+          comment: viralVideo.comments,
+          mode: viralMode,
+        }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        setViralResult(data.data);
+      } else {
+        alert(data.error || "分析失败");
+      }
+    } catch {
+      alert("分析失败，请检查网络连接");
+    } finally {
+      setViralAnalyzing(false);
+    }
+  };
+
+  // 打开爆款分析弹窗
+  const openViralModal = (video: { title: string; likes: number; comments: number }) => {
+    setViralVideo(video);
+    setViralTranscript("");
+    setViralResult(null);
+    setViralModalOpen(true);
   };
 
   // 计算全平台汇总
@@ -546,6 +620,21 @@ export default function AnalyticsPage() {
                       <MessageCircle className="w-3 h-3" />
                       {formatNumber(video.comments)}
                     </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                      onClick={() =>
+                        openViralModal({
+                          title: video.title,
+                          likes: video.likes,
+                          comments: video.comments,
+                        })
+                      }
+                    >
+                      <Sparkles className="w-3 h-3 mr-1" />
+                      爆款分析
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -606,6 +695,234 @@ export default function AnalyticsPage() {
                 <Button onClick={handleImport}>导入</Button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 爆款分析弹窗 */}
+      {viralModalOpen && viralVideo && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[85vh] overflow-y-auto p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-amber-500" />
+                爆款拆解分析
+              </h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setViralModalOpen(false);
+                  setViralVideo(null);
+                  setViralResult(null);
+                }}
+              >
+                关闭
+              </Button>
+            </div>
+
+            {/* 视频信息 */}
+            <div className="bg-slate-50 rounded-lg p-3 mb-4">
+              <p className="text-sm font-medium text-slate-900 truncate">
+                {viralVideo.title}
+              </p>
+              <div className="flex gap-4 mt-1 text-xs text-slate-500">
+                <span>点赞 {formatNumber(viralVideo.likes)}</span>
+                <span>评论 {formatNumber(viralVideo.comments)}</span>
+              </div>
+            </div>
+
+            {/* 分析模式选择 */}
+            {!viralResult && (
+              <div className="mb-4">
+                <label className="text-sm text-slate-600 mb-2 block">分析模式</label>
+                <div className="flex gap-2">
+                  <Button
+                    variant={viralMode === "six" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setViralMode("six")}
+                  >
+                    六维拆解（选题/钩子/结构/爆点/CTA/可抄点）
+                  </Button>
+                  <Button
+                    variant={viralMode === "seven" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setViralMode("seven")}
+                  >
+                    七维评估（脚本/元素/情绪/画面/力量/人设/建议）
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* 转录文案输入 */}
+            {!viralResult && (
+              <div className="mb-4">
+                <label className="text-sm text-slate-600 mb-2 block">
+                  视频转录文案
+                </label>
+                <textarea
+                  className="w-full h-32 border border-slate-200 rounded-lg p-3 text-sm"
+                  placeholder="粘贴视频的转录文案..."
+                  value={viralTranscript}
+                  onChange={(e) => setViralTranscript(e.target.value)}
+                />
+                <p className="text-xs text-slate-400 mt-1">
+                  可从剪映、飞书妙记等工具获取转录文案
+                </p>
+              </div>
+            )}
+
+            {/* 分析按钮 */}
+            {!viralResult && (
+              <Button
+                className="w-full"
+                onClick={handleViralAnalysis}
+                disabled={viralAnalyzing || !viralTranscript.trim()}
+              >
+                {viralAnalyzing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    AI 分析中...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    开始爆款分析
+                  </>
+                )}
+              </Button>
+            )}
+
+            {/* 分析结果 */}
+            {viralResult && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-medium text-slate-700">分析结果</h4>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setViralResult(null);
+                      setViralTranscript("");
+                    }}
+                  >
+                    重新分析
+                  </Button>
+                </div>
+
+                {/* 六维拆解结果 */}
+                {viralMode === "six" && (
+                  <div className="space-y-3">
+                    {viralResult.选题角度 && (
+                      <div className="bg-blue-50 rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Target className="w-4 h-4 text-blue-600" />
+                          <span className="text-sm font-medium text-blue-900">选题角度</span>
+                        </div>
+                        <p className="text-sm text-blue-800">{viralResult.选题角度}</p>
+                      </div>
+                    )}
+                    {viralResult.钩子 && (
+                      <div className="bg-amber-50 rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Zap className="w-4 h-4 text-amber-600" />
+                          <span className="text-sm font-medium text-amber-900">钩子</span>
+                        </div>
+                        <p className="text-sm text-amber-800">{viralResult.钩子}</p>
+                      </div>
+                    )}
+                    {viralResult.结构 && (
+                      <div className="bg-green-50 rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <FileText className="w-4 h-4 text-green-600" />
+                          <span className="text-sm font-medium text-green-900">结构</span>
+                        </div>
+                        <p className="text-sm text-green-800">{viralResult.结构}</p>
+                      </div>
+                    )}
+                    {viralResult["爆点·数据证据"] && (
+                      <div className="bg-red-50 rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <TrendingUp className="w-4 h-4 text-red-600" />
+                          <span className="text-sm font-medium text-red-900">爆点·数据证据</span>
+                        </div>
+                        <p className="text-sm text-red-800">{viralResult["爆点·数据证据"]}</p>
+                      </div>
+                    )}
+                    {viralResult.CTA && (
+                      <div className="bg-purple-50 rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <MessageCircle className="w-4 h-4 text-purple-600" />
+                          <span className="text-sm font-medium text-purple-900">CTA</span>
+                        </div>
+                        <p className="text-sm text-purple-800">{viralResult.CTA}</p>
+                      </div>
+                    )}
+                    {viralResult.可抄点 && (
+                      <div className="bg-emerald-50 rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Lightbulb className="w-4 h-4 text-emerald-600" />
+                          <span className="text-sm font-medium text-emerald-900">可抄点</span>
+                        </div>
+                        <p className="text-sm text-emerald-800">{viralResult.可抄点}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 七维评估结果 */}
+                {viralMode === "seven" && (
+                  <div className="space-y-3">
+                    {viralResult.脚本类型 && (
+                      <div className="bg-blue-50 rounded-lg p-3">
+                        <span className="text-sm font-medium text-blue-900">脚本类型：</span>
+                        <span className="text-sm text-blue-800">{viralResult.脚本类型}</span>
+                      </div>
+                    )}
+                    {viralResult.爆款元素 && (
+                      <div className="bg-amber-50 rounded-lg p-3">
+                        <span className="text-sm font-medium text-amber-900">爆款元素：</span>
+                        <span className="text-sm text-amber-800">{viralResult.爆款元素}</span>
+                      </div>
+                    )}
+                    {viralResult.情绪波动点 && (
+                      <div className="bg-pink-50 rounded-lg p-3">
+                        <span className="text-sm font-medium text-pink-900">情绪波动点：</span>
+                        <span className="text-sm text-pink-800">{viralResult.情绪波动点}</span>
+                      </div>
+                    )}
+                    {viralResult.画面感 && (
+                      <div className="bg-green-50 rounded-lg p-3">
+                        <span className="text-sm font-medium text-green-900">画面感：</span>
+                        <span className="text-sm text-green-800">{viralResult.画面感}</span>
+                      </div>
+                    )}
+                    {viralResult.力量感 && (
+                      <div className="bg-red-50 rounded-lg p-3">
+                        <span className="text-sm font-medium text-red-900">力量感：</span>
+                        <span className="text-sm text-red-800">{viralResult.力量感}</span>
+                      </div>
+                    )}
+                    {viralResult.人设类型 && (
+                      <div className="bg-purple-50 rounded-lg p-3">
+                        <span className="text-sm font-medium text-purple-900">人设类型：</span>
+                        <span className="text-sm text-purple-800">{viralResult.人设类型}</span>
+                      </div>
+                    )}
+                    {viralResult.运营建议 && (
+                      <div className="bg-emerald-50 rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Lightbulb className="w-4 h-4 text-emerald-600" />
+                          <span className="text-sm font-medium text-emerald-900">运营建议</span>
+                        </div>
+                        <p className="text-sm text-emerald-800">{viralResult.运营建议}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
