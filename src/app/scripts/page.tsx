@@ -28,6 +28,11 @@ import {
   Palette,
   Upload,
   FileVideo,
+  RefreshCw,
+  Languages,
+  Type,
+  ChevronRight,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -140,6 +145,16 @@ export default function ScriptsPage() {
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadedFileName, setUploadedFileName] = useState('');
+
+  // 工作流步骤状态
+  const [currentStep, setCurrentStep] = useState(1);
+  const [creativityLevel, setCreativityLevel] = useState(70);
+  const [detailLevel, setDetailLevel] = useState(50);
+  const [isRewriting, setIsRewriting] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [isGeneratingTitles, setIsGeneratingTitles] = useState(false);
+  const [generatedTitles, setGeneratedTitles] = useState<string[]>([]);
+  const [translateLang, setTranslateLang] = useState('英语');
 
   // 从 localStorage 加载脚本
   useEffect(() => {
@@ -469,6 +484,236 @@ ${streamContent}
       setIsGenerating(false);
     }
   }, [streamContent, topicTitle, platform, selectedPreset]);
+
+  // 一键二创 - 对已有脚本进行二次创作
+  const handleRewriteScript = useCallback(async () => {
+    if (!streamContent.trim() && !selectedScript) return;
+
+    const sourceContent = streamContent || selectedScript?.content || '';
+    setIsRewriting(true);
+    setStreamContent('');
+
+    try {
+      const response = await fetch('/api/generate-script', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topicTitle: `二创：${topicTitle || selectedScript?.topicTitle}`,
+          platform,
+          style: selectedPreset.style,
+          duration: '3-5分钟',
+          systemPrompt: `你是一个专业的脚本改写专家。请对以下脚本进行深度二次创作，要求：
+1. 保留核心主题和关键信息
+2. 改变表达方式和叙事角度，使其更具原创性
+3. 优化开头钩子，增强吸引力
+4. 调整节奏和结构，提升观看体验
+5. 使用「${selectedPreset.style}」风格
+
+创意度：${creativityLevel}%（越高越有创意，越低越接近原文）
+详细度：${detailLevel}%（越高越详细，越低越精简）
+
+原始脚本：
+${sourceContent}
+
+请输出完整的二创脚本：`,
+        }),
+      });
+
+      if (!response.ok) {
+        setStreamContent('二创失败，请重试');
+        setIsRewriting(false);
+        return;
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        setIsRewriting(false);
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let fullContent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const text = decoder.decode(value, { stream: true });
+        const lines = text.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.content) {
+                fullContent += data.content;
+                setStreamContent(fullContent);
+              }
+            } catch {
+              // skip
+            }
+          }
+        }
+      }
+    } catch (err) {
+      setStreamContent(`二创失败：${err instanceof Error ? err.message : '网络错误'}`);
+    } finally {
+      setIsRewriting(false);
+    }
+  }, [streamContent, selectedScript, topicTitle, platform, selectedPreset, creativityLevel, detailLevel]);
+
+  // 一键翻译
+  const handleTranslateScript = useCallback(async () => {
+    if (!streamContent.trim() && !selectedScript) return;
+
+    const sourceContent = streamContent || selectedScript?.content || '';
+    setIsTranslating(true);
+
+    try {
+      const response = await fetch('/api/generate-script', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topicTitle: `翻译：${topicTitle || selectedScript?.topicTitle}`,
+          platform,
+          style: '翻译',
+          duration: '不限',
+          systemPrompt: `你是一个专业的视频脚本翻译专家。请将以下脚本翻译成${translateLang}，要求：
+1. 保持原文的结构和格式
+2. 翻译要自然流畅，符合目标语言的表达习惯
+3. 保留专业术语的准确性
+4. 适当调整文化差异，使其更适合目标语言的受众
+
+原始脚本：
+${sourceContent}
+
+请输出翻译后的完整脚本：`,
+        }),
+      });
+
+      if (!response.ok) {
+        setStreamContent('翻译失败，请重试');
+        setIsTranslating(false);
+        return;
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        setIsTranslating(false);
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let fullContent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const text = decoder.decode(value, { stream: true });
+        const lines = text.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.content) {
+                fullContent += data.content;
+                setStreamContent(fullContent);
+              }
+            } catch {
+              // skip
+            }
+          }
+        }
+      }
+    } catch (err) {
+      setStreamContent(`翻译失败：${err instanceof Error ? err.message : '网络错误'}`);
+    } finally {
+      setIsTranslating(false);
+    }
+  }, [streamContent, selectedScript, topicTitle, platform, translateLang]);
+
+  // 智能生成标题
+  const handleGenerateTitles = useCallback(async () => {
+    if (!streamContent.trim() && !selectedScript) return;
+
+    const sourceContent = streamContent || selectedScript?.content || '';
+    setIsGeneratingTitles(true);
+    setGeneratedTitles([]);
+
+    try {
+      const response = await fetch('/api/generate-script', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topicTitle: '生成标题',
+          platform,
+          style: '标题生成',
+          duration: '不限',
+          systemPrompt: `你是一个专业的视频标题生成专家。请根据以下脚本内容，生成5个吸引人的视频标题，要求：
+1. 每个标题控制在15字以内
+2. 使用不同的标题公式（悬念型、数字型、对比型、痛点型、情感型）
+3. 标题要有吸引力，能引发点击欲望
+4. 适合${platform}平台的风格
+
+脚本内容：
+${sourceContent.slice(0, 500)}
+
+请输出5个标题，每行一个，格式如下：
+1. [悬念型] 标题内容
+2. [数字型] 标题内容
+3. [对比型] 标题内容
+4. [痛点型] 标题内容
+5. [情感型] 标题内容`,
+        }),
+      });
+
+      if (!response.ok) {
+        setIsGeneratingTitles(false);
+        return;
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        setIsGeneratingTitles(false);
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let fullContent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const text = decoder.decode(value, { stream: true });
+        const lines = text.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.content) {
+                fullContent += data.content;
+              }
+            } catch {
+              // skip
+            }
+          }
+        }
+      }
+
+      // 解析标题
+      const titleLines = fullContent.split('\n').filter(line => line.match(/^\d+\./));
+      const titles = titleLines.map(line => line.replace(/^\d+\.\s*\[.*?\]\s*/, '').trim()).filter(Boolean);
+      setGeneratedTitles(titles.slice(0, 5));
+    } catch {
+      // ignore errors
+    } finally {
+      setIsGeneratingTitles(false);
+    }
+  }, [streamContent, selectedScript, platform]);
 
   // 扒视频 - 只提取文案
   const handleScrapeVideo = useCallback(async () => {
@@ -1060,6 +1305,199 @@ ${agentStyleGuide}
                     <span><span className="font-medium text-amber-700">阶梯递进</span> 每段比前一段更大、赌注更高</span>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* 工作流步骤指示器 */}
+            <div className="mt-4 flex items-center gap-2">
+              {[
+                { step: 1, label: '输入选题', icon: Edit3 },
+                { step: 2, label: 'AI 生成', icon: Sparkles },
+                { step: 3, label: '编辑优化', icon: Wand2 },
+                { step: 4, label: '导出使用', icon: Download },
+              ].map((item, idx) => (
+                <div key={item.step} className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentStep(item.step)}
+                    className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                      currentStep >= item.step
+                        ? 'bg-violet-100 text-violet-700'
+                        : 'bg-slate-100 text-slate-400'
+                    }`}
+                  >
+                    <item.icon className="h-3 w-3" />
+                    {item.label}
+                  </button>
+                  {idx < 3 && <ChevronRight className="h-3 w-3 text-slate-300" />}
+                </div>
+              ))}
+            </div>
+
+            {/* AI 操作工具栏 */}
+            {(streamContent || selectedScript) && (
+              <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/50 p-3">
+                <div className="flex items-center gap-2 mb-3">
+                  <SlidersHorizontal className="h-3.5 w-3.5 text-slate-500" />
+                  <span className="text-xs font-medium text-slate-600">AI 操作工具栏</span>
+                </div>
+
+                {/* 参数滑块 */}
+                <div className="grid grid-cols-2 gap-4 mb-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] text-slate-500">创意度</span>
+                      <span className="text-[10px] font-medium text-violet-600">{creativityLevel}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={creativityLevel}
+                      onChange={(e) => setCreativityLevel(Number(e.target.value))}
+                      className="w-full h-1.5 rounded-full appearance-none bg-slate-200 accent-violet-500"
+                    />
+                    <div className="flex justify-between text-[9px] text-slate-400 mt-0.5">
+                      <span>保守</span>
+                      <span>创新</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] text-slate-500">详细度</span>
+                      <span className="text-[10px] font-medium text-violet-600">{detailLevel}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={detailLevel}
+                      onChange={(e) => setDetailLevel(Number(e.target.value))}
+                      className="w-full h-1.5 rounded-full appearance-none bg-slate-200 accent-violet-500"
+                    />
+                    <div className="flex justify-between text-[9px] text-slate-400 mt-0.5">
+                      <span>精简</span>
+                      <span>详细</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* AI 操作按钮 */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 gap-1.5 text-xs border-violet-200 text-violet-600 hover:bg-violet-50"
+                    onClick={handleRewriteScript}
+                    disabled={isRewriting || isGenerating}
+                  >
+                    {isRewriting ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3 w-3" />
+                    )}
+                    一键二创
+                  </Button>
+
+                  <div className="flex items-center gap-1">
+                    <Select value={translateLang} onValueChange={setTranslateLang}>
+                      <SelectTrigger className="h-7 w-[80px] rounded-md border-slate-200 text-[10px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="英语">英语</SelectItem>
+                        <SelectItem value="日语">日语</SelectItem>
+                        <SelectItem value="韩语">韩语</SelectItem>
+                        <SelectItem value="西班牙语">西班牙语</SelectItem>
+                        <SelectItem value="法语">法语</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 gap-1.5 text-xs border-blue-200 text-blue-600 hover:bg-blue-50"
+                      onClick={handleTranslateScript}
+                      disabled={isTranslating || isGenerating}
+                    >
+                      {isTranslating ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Languages className="h-3 w-3" />
+                      )}
+                      翻译
+                    </Button>
+                  </div>
+
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 gap-1.5 text-xs border-amber-200 text-amber-600 hover:bg-amber-50"
+                    onClick={handleGenerateTitles}
+                    disabled={isGeneratingTitles || isGenerating}
+                  >
+                    {isGeneratingTitles ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Type className="h-3 w-3" />
+                    )}
+                    生成标题
+                  </Button>
+
+                  <div className="h-4 w-px bg-slate-200" />
+
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 gap-1.5 text-xs border-slate-200 text-slate-600 hover:bg-slate-50"
+                    onClick={() => {
+                      const content = streamContent || selectedScript?.content || '';
+                      navigator.clipboard.writeText(content);
+                    }}
+                  >
+                    <Copy className="h-3 w-3" />
+                    复制
+                  </Button>
+
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 gap-1.5 text-xs border-slate-200 text-slate-600 hover:bg-slate-50"
+                    onClick={() => {
+                      const content = streamContent || selectedScript?.content || '';
+                      const blob = new Blob([content], { type: 'text/markdown' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `${topicTitle || '脚本'}_${new Date().toISOString().slice(0, 10)}.md`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                  >
+                    <Download className="h-3 w-3" />
+                    导出
+                  </Button>
+                </div>
+
+                {/* 生成的标题列表 */}
+                {generatedTitles.length > 0 && (
+                  <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Type className="h-3.5 w-3.5 text-amber-600" />
+                      <span className="text-xs font-medium text-amber-700">推荐标题（点击使用）</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {generatedTitles.map((title, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => setTopicTitle(title)}
+                          className="block w-full text-left rounded-md px-2 py-1.5 text-xs text-slate-700 hover:bg-amber-100 transition-colors"
+                        >
+                          <span className="text-amber-500 mr-1.5">{idx + 1}.</span>
+                          {title}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
