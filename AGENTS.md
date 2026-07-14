@@ -30,6 +30,7 @@
 │   │   ├── scripts/page.tsx      # 脚本工坊（AI脚本生成）
 │   │   ├── articles/page.tsx     # 公众号文章（AI长文写作）
 │   │   ├── analytics/page.tsx    # 数据看板（播放/点赞/评论）
+│   │   ├── datasources/page.tsx  # 数据源管理（抖音/微博/直播/视频下载）
 │   │   ├── workflows/page.tsx    # 工作流管理（卡片式列表+执行监控）
 │   │   ├── workflows/create/page.tsx # 工作流编辑器（可视化节点画布+AI助手）
 │   │   ├── workflows/templates/page.tsx # 模板市场（浏览+一键克隆）
@@ -53,6 +54,10 @@
 │   │       ├── workflows/templates/route.ts # 模块模板和模型列表
 │   │       ├── workflows/clone/route.ts     # 从模板克隆工作流
 │   │       ├── workflows/ai-assist/route.ts # AI 工作流助手（对话式生成工作流）
+│   │       ├── weibo-trending/route.ts      # 微博热搜数据（API/爬虫）
+│   │       ├── douyin-live/route.ts         # 抖音直播间数据+弹幕监控
+│   │       ├── video-download/route.ts      # 多平台视频下载解析
+│   │       ├── dify-workflow/route.ts       # Dify AI 工作流执行
 │   │       └── douyin/                  # 抖音集成 API
 │   │           ├── auth/route.ts        # OAuth 登录发起
 │   │           ├── callback/route.ts    # OAuth 回调处理

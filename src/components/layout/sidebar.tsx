@@ -16,6 +16,7 @@ import {
   LayoutTemplate,
   PenSquare,
   BookOpen,
+  Database,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
@@ -26,6 +27,7 @@ const navItems = [
   { href: '/scripts', label: '脚本工坊', icon: FileText },
   { href: '/articles', label: '公众号文章', icon: PenSquare },
   { href: '/analytics', label: '数据看板', icon: BarChart3 },
+  { href: '/datasources', label: '数据源', icon: Database },
   { href: '/knowledge', label: '知识库', icon: BookOpen },
   { href: '/workflows', label: '工作流', icon: Workflow },
   { href: '/workflows/templates', label: '模板市场', icon: LayoutTemplate },
