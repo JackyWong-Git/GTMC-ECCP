@@ -53,7 +53,7 @@ interface WorkflowTemplate {
   useCount: number;
 }
 
-type SettingsTab = "platform" | "team" | "workflows" | "templates";
+type SettingsTab = "platform" | "team" | "workflows" | "templates" | "mcp";
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("platform");
@@ -214,6 +214,7 @@ export default function SettingsPage() {
     { id: "team" as SettingsTab, label: "团队管理", icon: Users },
     { id: "workflows" as SettingsTab, label: "工作流", icon: Workflow },
     { id: "templates" as SettingsTab, label: "模板市场", icon: LayoutTemplate },
+    { id: "mcp" as SettingsTab, label: "MCP 工具", icon: Zap },
   ];
 
   if (loading) {
@@ -638,6 +639,197 @@ export default function SettingsPage() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* MCP Tools Tab */}
+      {activeTab === "mcp" && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-medium text-slate-900">MCP 工具矩阵</h2>
+              <p className="text-xs text-slate-500 mt-1">
+                将 ECCP 能力暴露为 MCP 工具，让 AI 助手（如 Claude Desktop）可以直接调用
+              </p>
+            </div>
+            <Badge variant="outline" className="border-emerald-200 text-emerald-700 bg-emerald-50">
+              <CheckCircle2 className="h-3 w-3 mr-1" />
+              API 就绪
+            </Badge>
+          </div>
+
+          {/* MCP Architecture Overview */}
+          <Card className="border-slate-200 bg-gradient-to-br from-slate-50 to-white">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-slate-900 flex items-center gap-2">
+                <Zap className="h-4 w-4 text-amber-500" />
+                L5 架构：AI 自主决策
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-4 gap-3 text-center">
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+                  <Eye className="h-5 w-5 text-blue-600 mx-auto mb-1" />
+                  <p className="text-xs font-medium text-blue-900">感知层</p>
+                  <p className="text-[10px] text-blue-600">数据采集</p>
+                </div>
+                <div className="rounded-lg border border-purple-200 bg-purple-50 p-3">
+                  <Sparkles className="h-5 w-5 text-purple-600 mx-auto mb-1" />
+                  <p className="text-xs font-medium text-purple-900">分析层</p>
+                  <p className="text-[10px] text-purple-600">智能决策</p>
+                </div>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <Play className="h-5 w-5 text-amber-600 mx-auto mb-1" />
+                  <p className="text-xs font-medium text-amber-900">执行层</p>
+                  <p className="text-[10px] text-amber-600">内容生成</p>
+                </div>
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                  <BookOpen className="h-5 w-5 text-emerald-600 mx-auto mb-1" />
+                  <p className="text-xs font-medium text-emerald-900">记忆层</p>
+                  <p className="text-[10px] text-emerald-600">知识管理</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Tool Categories */}
+          <div className="space-y-4">
+            {/* Perception Tools */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-slate-900 flex items-center gap-2">
+                  <Eye className="h-4 w-4 text-blue-500" />
+                  感知层（眼睛）
+                  <Badge variant="outline" className="ml-auto text-xs">5 个工具</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {[
+                    { name: 'search_douyin_trending', desc: '获取抖音热搜榜数据' },
+                    { name: 'search_weibo_trending', desc: '获取微博热搜榜数据' },
+                    { name: 'extract_video_transcript', desc: '从视频 URL 提取口播文案' },
+                    { name: 'collect_douyin_comments', desc: '采集抖音视频评论区数据' },
+                    { name: 'crawl_platform_data', desc: '从 20+ 平台采集数据' },
+                  ].map(tool => (
+                    <div key={tool.name} className="flex items-center justify-between rounded-md border border-slate-100 px-3 py-2">
+                      <div>
+                        <code className="text-xs font-mono text-slate-700">{tool.name}</code>
+                        <p className="text-[11px] text-slate-500">{tool.desc}</p>
+                      </div>
+                      <Badge variant="outline" className="text-[10px] border-blue-200 text-blue-600">perception</Badge>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Analysis Tools */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-slate-900 flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-purple-500" />
+                  分析层（大脑）
+                  <Badge variant="outline" className="ml-auto text-xs">2 个工具</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {[
+                    { name: 'analyze_topic', desc: '多维度热度评估选题价值' },
+                    { name: 'sentiment_analysis', desc: '文本情感分析' },
+                  ].map(tool => (
+                    <div key={tool.name} className="flex items-center justify-between rounded-md border border-slate-100 px-3 py-2">
+                      <div>
+                        <code className="text-xs font-mono text-slate-700">{tool.name}</code>
+                        <p className="text-[11px] text-slate-500">{tool.desc}</p>
+                      </div>
+                      <Badge variant="outline" className="text-[10px] border-purple-200 text-purple-600">analysis</Badge>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Execution Tools */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-slate-900 flex items-center gap-2">
+                  <Play className="h-4 w-4 text-amber-500" />
+                  执行层（手）
+                  <Badge variant="outline" className="ml-auto text-xs">2 个工具</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {[
+                    { name: 'generate_script', desc: '根据选题生成视频脚本' },
+                    { name: 'generate_article', desc: '根据选题生成长文内容' },
+                  ].map(tool => (
+                    <div key={tool.name} className="flex items-center justify-between rounded-md border border-slate-100 px-3 py-2">
+                      <div>
+                        <code className="text-xs font-mono text-slate-700">{tool.name}</code>
+                        <p className="text-[11px] text-slate-500">{tool.desc}</p>
+                      </div>
+                      <Badge variant="outline" className="text-[10px] border-amber-200 text-amber-600">execution</Badge>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Memory Tools */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-slate-900 flex items-center gap-2">
+                  <BookOpen className="h-4 w-4 text-emerald-500" />
+                  记忆层（记忆）
+                  <Badge variant="outline" className="ml-auto text-xs">2 个工具</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {[
+                    { name: 'save_to_knowledge', desc: '将内容保存到知识库' },
+                    { name: 'search_knowledge', desc: '在知识库中语义搜索' },
+                  ].map(tool => (
+                    <div key={tool.name} className="flex items-center justify-between rounded-md border border-slate-100 px-3 py-2">
+                      <div>
+                        <code className="text-xs font-mono text-slate-700">{tool.name}</code>
+                        <p className="text-[11px] text-slate-500">{tool.desc}</p>
+                      </div>
+                      <Badge variant="outline" className="text-[10px] border-emerald-200 text-emerald-600">memory</Badge>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* API Endpoints */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-slate-900">API 端点</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 font-mono text-xs">
+                <div className="flex items-center gap-2 rounded bg-slate-50 px-3 py-2">
+                  <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px]">GET</Badge>
+                  <code className="text-slate-700">/api/mcp?action=list_tools</code>
+                </div>
+                <div className="flex items-center gap-2 rounded bg-slate-50 px-3 py-2">
+                  <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-[10px]">POST</Badge>
+                  <code className="text-slate-700">/api/mcp</code>
+                  <span className="text-slate-400 ml-auto">执行工具</span>
+                </div>
+                <div className="flex items-center gap-2 rounded bg-slate-50 px-3 py-2">
+                  <Badge className="bg-purple-100 text-purple-700 border-purple-200 text-[10px]">POST</Badge>
+                  <code className="text-slate-700">/api/mcp/orchestrate</code>
+                  <span className="text-slate-400 ml-auto">AI 编排</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>

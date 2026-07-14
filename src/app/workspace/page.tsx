@@ -107,6 +107,12 @@ export default function WorkspacePage() {
   const [hotTopics, setHotTopics] = useState<Array<{ title: string; hotValue: number; source: string }>>([]);
   const [isLoadingHotTopics, setIsLoadingHotTopics] = useState(false);
 
+  // Video transcript state
+  const [showVideoInput, setShowVideoInput] = useState(false);
+  const [videoUrl, setVideoUrl] = useState('');
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [videoTranscript, setVideoTranscript] = useState('');
+
   // Auth-aware fetch
   const authFetch = useCallback((url: string, options: RequestInit = {}) => {
     const headers = new Headers(options.headers || {});
@@ -437,6 +443,47 @@ export default function WorkspacePage() {
       toast.error('生成失败，请重试');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  // Extract transcript from video
+  const handleExtractVideoTranscript = async () => {
+    if (!videoUrl.trim()) {
+      toast.error('请输入视频链接');
+      return;
+    }
+
+    setIsExtracting(true);
+    setVideoTranscript('');
+
+    try {
+      const response = await authFetch('/api/video-transcript', {
+        method: 'POST',
+        body: JSON.stringify({ url: videoUrl }),
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.data?.transcript) {
+        setVideoTranscript(data.data.transcript);
+        toast.success(`视频文案提取成功（${data.data.platform}）`);
+      } else {
+        toast.error(data.error || '提取失败');
+      }
+    } catch (error) {
+      console.error('Video transcript error:', error);
+      toast.error('视频文案提取失败');
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
+  // Use video transcript as reference for generation
+  const handleUseTranscriptAsReference = () => {
+    if (videoTranscript && selectedTopic) {
+      setGeneratedContent(`## 参考视频文案\n\n${videoTranscript}\n\n---\n\n## 基于参考生成的内容\n\n（请点击上方"生成"按钮，AI 将参考上述文案风格进行创作）`);
+      setShowVideoInput(false);
+      toast.success('已加载参考文案');
     }
   };
 
@@ -867,7 +914,29 @@ export default function WorkspacePage() {
                 <div className="flex h-full flex-col items-center justify-center text-slate-400">
                   <Sparkles className="h-16 w-16 mb-4 opacity-50" />
                   <p className="text-lg mb-2">准备就绪</p>
-                  <p className="text-sm">点击下方按钮开始 AI 创作</p>
+                  <p className="text-sm mb-6">点击下方按钮开始 AI 创作</p>
+                  
+                  {/* Quick Actions */}
+                  <div className="flex gap-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowVideoInput(true)}
+                      className="text-slate-600"
+                    >
+                      <Globe className="h-4 w-4 mr-2" />
+                      从视频学习
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowHotTopics(true)}
+                      className="text-slate-600"
+                    >
+                      <Flame className="h-4 w-4 mr-2" />
+                      热榜找灵感
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
@@ -954,6 +1023,77 @@ export default function WorkspacePage() {
                   创建
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Video Transcript Modal */}
+      {showVideoInput && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <Card className="w-full max-w-lg mx-4">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Globe className="h-5 w-5 text-blue-500" />
+                从视频学习
+              </CardTitle>
+              <button
+                onClick={() => { setShowVideoInput(false); setVideoTranscript(''); }}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-slate-700 mb-1 block">视频链接</label>
+                <Input
+                  value={videoUrl}
+                  onChange={(e) => setVideoUrl(e.target.value)}
+                  placeholder="粘贴抖音/B站/快手视频链接..."
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  支持抖音分享链接、B站链接等，AI 将提取视频口播文案
+                </p>
+              </div>
+
+              <Button
+                className="w-full"
+                onClick={handleExtractVideoTranscript}
+                disabled={isExtracting || !videoUrl.trim()}
+              >
+                {isExtracting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    提取中...
+                  </>
+                ) : (
+                  <>
+                    <Database className="h-4 w-4 mr-2" />
+                    提取文案
+                  </>
+                )}
+              </Button>
+
+              {videoTranscript && (
+                <div className="mt-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-slate-700">提取结果</span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleUseTranscriptAsReference}
+                    >
+                      用作参考
+                    </Button>
+                  </div>
+                  <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <pre className="text-sm text-slate-700 whitespace-pre-wrap font-sans">
+                      {videoTranscript}
+                    </pre>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

@@ -59,6 +59,10 @@
 │   │       ├── douyin-live/route.ts         # 抖音直播间数据+弹幕监控
 │   │       ├── video-download/route.ts      # 多平台视频下载解析
 │   │       ├── dify-workflow/route.ts       # Dify AI 工作流执行
+│   │       ├── video-transcript/route.ts    # 视频转文字（FFmpeg + 语音识别）
+│   │       ├── douyin-comments/route.ts     # 抖音评论采集（情感分析）
+│   │       ├── mcp/route.ts                 # MCP 工具调用接口
+│   │       ├── mcp/orchestrate/route.ts     # AI Orchestrator（自然语言编排）
 │   │       └── douyin/                  # 抖音集成 API
 │   │           ├── auth/route.ts        # OAuth 登录发起
 │   │           ├── callback/route.ts    # OAuth 回调处理
@@ -76,7 +80,8 @@
 │   │   ├── douyin-client.ts      # 抖音开放平台 API 客户端封装
 │   │   ├── platform-config.ts    # 平台配置存储工具（.platform-config.json）
 │   │   ├── workflow-store.ts     # 工作流存储工具（.workflows.json）
-│   │   ├── workflow-templates.ts # 工作流模板库（5个预设模板）
+│   │   ├── workflow-templates.ts # 工作流模板库（6个预设模板，含深度研究）
+│   │   ├── mcp-server.ts       # MCP Server 核心（11个工具，4层架构）
 │   │   └── topic-cache.ts      # 选题热榜缓存工具（本地 JSON 文件存储）
 │   └── server.ts                 # 自定义服务端入口
 ├── DESIGN.md                     # 设计规范文件
@@ -86,6 +91,47 @@
 ```
 
 - 项目文件（如 app 目录、pages 目录、components 等）默认初始化到 `src/` 目录下。
+
+## MCP 架构（L5 自动化）
+
+平台采用 MCP（Model Context Protocol）架构实现 L5 级别的全自动运营。MCP 是 AI 的"神经系统"——让 AI 能"看"（数据采集）、"想"（智能分析）、"动"（内容执行）、"记"（知识管理）。
+
+### 四层架构
+
+| 层级 | 类别 | 工具数 | 说明 |
+|------|------|--------|------|
+| 感知层（眼睛） | perception | 5 | 抖音热搜、微博热搜、视频文案、评论采集、选题搜索 |
+| 分析层（大脑） | analysis | 2 | 选题评估、情感分析 |
+| 执行层（手） | execution | 2 | 脚本生成、文章生成 |
+| 记忆层（记忆） | memory | 2 | 知识库存储、语义搜索 |
+
+### 核心文件
+
+- `src/lib/mcp-server.ts` - MCP Server 核心，定义 11 个工具及其执行逻辑
+- `src/app/api/mcp/route.ts` - MCP 工具调用接口（list_tools / execute）
+- `src/app/api/mcp/orchestrate/route.ts` - AI Orchestrator，自然语言驱动的多工具编排
+
+### 使用方式
+
+```typescript
+// 1. 列出所有工具
+GET /api/mcp?action=list_tools
+
+// 2. 执行单个工具
+POST /api/mcp
+{ "tool": "search_douyin_trending", "params": { "keyword": "新能源汽车" } }
+
+// 3. 自然语言编排（AI 自动拆解为多步骤）
+POST /api/mcp/orchestrate
+{ "command": "搜索新能源汽车热点，生成三条短视频脚本，存到知识库" }
+```
+
+### 依赖配置
+
+MCP 工具依赖以下外部服务（在系统设置中配置）：
+- `crawl-data-api` - 数据采集（抖音/微博/视频/评论）
+- `LLM API` - 智能分析（doubao-seed-2-0-lite）
+- `Knowledge API` - 知识库存储
 
 ## 包管理规范
 
