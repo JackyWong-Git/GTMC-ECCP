@@ -73,9 +73,9 @@ const workflowSteps = [
 
 // Quick actions
 const quickActions = [
-  { title: '抓取热榜', desc: '获取抖音/视频号实时热门话题', icon: RefreshCw, href: '/topics', color: 'text-amber-500', bg: 'bg-amber-50' },
+  { title: '抓取热榜', desc: '获取抖音/视频号实时热门话题', icon: RefreshCw, href: '/workspace', color: 'text-amber-500', bg: 'bg-amber-50' },
   { title: '导入数据', desc: '上传 CSV/JSON 格式的选题或视频数据', icon: Database, href: '/analytics', color: 'text-blue-500', bg: 'bg-blue-50' },
-  { title: '生成脚本', desc: '选择选题后 AI 自动生成脚本大纲', icon: FileText, href: '/scripts', color: 'text-violet-500', bg: 'bg-violet-50' },
+  { title: '生成脚本', desc: '选择选题后 AI 自动生成脚本大纲', icon: FileText, href: '/workspace', color: 'text-violet-500', bg: 'bg-violet-50' },
   { title: '知识库', desc: '管理文档、语义搜索、AI 引用', icon: BookOpen, href: '/knowledge', color: 'text-cyan-500', bg: 'bg-cyan-50' },
 ];
 

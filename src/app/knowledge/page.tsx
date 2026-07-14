@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
 import {
   Search,
   Plus,
@@ -30,7 +32,17 @@ import {
   Zap,
   TrendingUp,
   HelpCircle,
+  Target,
 } from 'lucide-react';
+
+// Search result interface
+interface SearchResult {
+  id: string;
+  title: string;
+  content: string;
+  source: string;
+  score: number;
+}
 
 // Document interface
 interface Document {
@@ -266,6 +278,42 @@ export default function KnowledgePage() {
     localStorage.setItem('featuredDocs', JSON.stringify(newIds));
   };
 
+  // Create topic from search result
+  const createTopicFromSearch = async (result: Document) => {
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error('请先登录');
+        return;
+      }
+
+      const response = await fetch('/api/topics', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-session': session.access_token,
+        },
+        body: JSON.stringify({
+          title: result.title,
+          source: '知识库',
+          priority: '中',
+          status: '待认领',
+          description: result.content.slice(0, 200),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('创建选题失败');
+      }
+
+      toast.success('选题已创建');
+    } catch (error) {
+      console.error('创建选题失败:', error);
+      toast.error('创建选题失败');
+    }
+  };
+
   // Filter documents
   const filteredDocs = documents.filter(doc =>
     doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -353,6 +401,15 @@ export default function KnowledgePage() {
                         ))}
                       </div>
                     </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => createTopicFromSearch(result)}
+                      className="shrink-0"
+                    >
+                      <Target className="w-4 h-4 mr-1" />
+                      创建选题
+                    </Button>
                   </div>
                 </div>
               ))}

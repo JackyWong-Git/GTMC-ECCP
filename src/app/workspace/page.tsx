@@ -33,6 +33,7 @@ import {
   Flame,
   Globe,
   Database,
+  X,
 } from 'lucide-react';
 
 // Topic status flow
@@ -101,6 +102,11 @@ export default function WorkspacePage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [showMenuFor, setShowMenuFor] = useState<string | null>(null);
 
+  // Hot topic search state
+  const [showHotTopics, setShowHotTopics] = useState(false);
+  const [hotTopics, setHotTopics] = useState<Array<{ title: string; hotValue: number; source: string }>>([]);
+  const [isLoadingHotTopics, setIsLoadingHotTopics] = useState(false);
+
   // Auth-aware fetch
   const authFetch = useCallback((url: string, options: RequestInit = {}) => {
     const headers = new Headers(options.headers || {});
@@ -112,6 +118,56 @@ export default function WorkspacePage() {
     }
     return fetch(url, { ...options, headers });
   }, [accessToken]);
+
+  // Fetch hot topics from multiple sources
+  const fetchHotTopics = useCallback(async () => {
+    setIsLoadingHotTopics(true);
+    try {
+      const [douyinRes, weiboRes] = await Promise.allSettled([
+        fetch('/api/douyin-trending'),
+        fetch('/api/weibo-trending'),
+      ]);
+
+      const topics: Array<{ title: string; hotValue: number; source: string }> = [];
+
+      if (douyinRes.status === 'fulfilled' && douyinRes.value.ok) {
+        const data = await douyinRes.value.json();
+        if (data.success && data.data?.videos) {
+          topics.push(...data.data.videos.slice(0, 10).map((v: { title: string; likeCount?: number }) => ({
+            title: v.title,
+            hotValue: v.likeCount || 0,
+            source: '抖音',
+          })));
+        }
+      }
+
+      if (weiboRes.status === 'fulfilled' && weiboRes.value.ok) {
+        const data = await weiboRes.value.json();
+        if (data.success && data.data?.topics) {
+          topics.push(...data.data.topics.slice(0, 10).map((t: { title: string; hotValue: number }) => ({
+            title: t.title,
+            hotValue: t.hotValue,
+            source: '微博',
+          })));
+        }
+      }
+
+      setHotTopics(topics.sort((a, b) => b.hotValue - a.hotValue).slice(0, 15));
+    } catch (error) {
+      console.error('Failed to fetch hot topics:', error);
+      toast.error('获取热榜失败');
+    } finally {
+      setIsLoadingHotTopics(false);
+    }
+  }, []);
+
+  // Use hot topic as new topic
+  const handleUseHotTopic = (hotTopic: { title: string; hotValue: number; source: string }) => {
+    setNewTitle(hotTopic.title);
+    setNewDescription(`来自${hotTopic.source}热榜，热度 ${hotTopic.hotValue.toLocaleString()}`);
+    setShowHotTopics(false);
+    setShowCreateModal(true);
+  };
 
   // Initialize
   useEffect(() => {
@@ -331,7 +387,7 @@ export default function WorkspacePage() {
     try {
       const endpoint = creationMode === 'script' ? '/api/generate-script' : '/api/generate-article';
       const body = creationMode === 'script'
-        ? { topic: selectedTopic.title, style: scriptStyle, duration: scriptDuration }
+        ? { topicTitle: selectedTopic.title, platform: 'douyin' }
         : { topic: selectedTopic.title, keywords: selectedTopic.description };
 
       const response = await authFetch(endpoint, {
@@ -384,10 +440,36 @@ export default function WorkspacePage() {
     }
   };
 
-  // Copy content
-  const handleCopy = () => {
-    navigator.clipboard.writeText(generatedContent);
-    toast.success('已复制到剪贴板');
+  // Save to knowledge base
+  const handleSaveToKnowledge = async () => {
+    if (!generatedContent.trim()) {
+      toast.error('没有可保存的内容');
+      return;
+    }
+
+    try {
+      const response = await authFetch('/api/knowledge', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'import',
+          source: 'local',
+          title: `${selectedTopic?.title || '生成内容'} - ${creationMode === 'script' ? '脚本' : '文章'}`,
+          content: generatedContent,
+          tags: [creationMode === 'script' ? '脚本' : '文章', 'AI生成'],
+        }),
+      });
+
+      if (response.ok) {
+        toast.success('已保存到知识库');
+        setShowMenuFor(null);
+      } else {
+        const error = await response.json();
+        toast.error(error.error || '保存失败');
+      }
+    } catch (error) {
+      console.error('Save to knowledge error:', error);
+      toast.error('保存失败');
+    }
   };
 
   // Download content
@@ -400,6 +482,16 @@ export default function WorkspacePage() {
     a.click();
     URL.revokeObjectURL(url);
     toast.success('已下载');
+  };
+
+  // Copy content
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(generatedContent);
+      toast.success('已复制到剪贴板');
+    } catch {
+      toast.error('复制失败');
+    }
   };
 
   // Filter topics
@@ -433,11 +525,69 @@ export default function WorkspacePage() {
         <div className="border-b border-slate-200 p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold text-slate-900">选题池</h2>
-            <Button size="sm" onClick={() => setShowCreateModal(true)}>
-              <Plus className="h-4 w-4 mr-1" />
-              新建
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setShowHotTopics(!showHotTopics);
+                  if (!showHotTopics && hotTopics.length === 0) {
+                    fetchHotTopics();
+                  }
+                }}
+              >
+                <TrendingUp className="h-4 w-4 mr-1" />
+                热榜
+              </Button>
+              <Button size="sm" onClick={() => setShowCreateModal(true)}>
+                <Plus className="h-4 w-4 mr-1" />
+                新建
+              </Button>
+            </div>
           </div>
+
+          {/* Hot Topics Panel */}
+          {showHotTopics && (
+            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-amber-800">热榜选题</span>
+                <button
+                  onClick={() => setShowHotTopics(false)}
+                  className="text-amber-600 hover:text-amber-800"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              {isLoadingHotTopics ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-amber-600" />
+                  <span className="ml-2 text-sm text-amber-700">加载中...</span>
+                </div>
+              ) : hotTopics.length === 0 ? (
+                <p className="text-sm text-amber-700 py-2">暂无热榜数据</p>
+              ) : (
+                <div className="max-h-48 overflow-y-auto space-y-1">
+                  {hotTopics.map((topic, index) => (
+                    <button
+                      key={index}
+                      onClick={() => handleUseHotTopic(topic)}
+                      className="w-full text-left rounded px-2 py-1.5 text-sm hover:bg-amber-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
+                          index < 3 ? 'bg-red-500 text-white' : 'bg-amber-200 text-amber-800'
+                        }`}>
+                          {index + 1}
+                        </span>
+                        <span className="truncate text-slate-700">{topic.title}</span>
+                        <span className="shrink-0 text-xs text-amber-600">{topic.source}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Search */}
           <div className="relative mb-3">
@@ -573,8 +723,7 @@ export default function WorkspacePage() {
                               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setShowMenuFor(null);
-                                toast.info('已存知识库');
+                                handleSaveToKnowledge();
                               }}
                             >
                               <BookOpen className="h-4 w-4" />
