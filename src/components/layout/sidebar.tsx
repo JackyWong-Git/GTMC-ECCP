@@ -4,34 +4,23 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
-  Lightbulb,
   FileText,
   BarChart3,
-  Workflow,
-  Users,
+  Settings,
   Zap,
   ChevronLeft,
   ChevronRight,
-  Settings,
-  LayoutTemplate,
-  PenSquare,
   BookOpen,
-  Database,
+  PenTool,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 
 const navItems = [
   { href: '/', label: '运营总览', icon: LayoutDashboard },
-  { href: '/topics', label: '选题池', icon: Lightbulb },
-  { href: '/scripts', label: '脚本工坊', icon: FileText },
-  { href: '/articles', label: '公众号文章', icon: PenSquare },
-  { href: '/analytics', label: '数据看板', icon: BarChart3 },
-  { href: '/datasources', label: '数据源', icon: Database },
+  { href: '/workspace', label: '内容工作台', icon: PenTool },
   { href: '/knowledge', label: '知识库', icon: BookOpen },
-  { href: '/workflows', label: '工作流', icon: Workflow },
-  { href: '/workflows/templates', label: '模板市场', icon: LayoutTemplate },
-  { href: '/team', label: '团队协作', icon: Users },
+  { href: '/analytics', label: '数据看板', icon: BarChart3 },
   { href: '/settings', label: '系统设置', icon: Settings },
 ];
 

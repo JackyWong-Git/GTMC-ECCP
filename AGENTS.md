@@ -26,17 +26,18 @@
 │   │   ├── layout.tsx            # 根布局（侧边栏 + 顶栏）
 │   │   ├── page.tsx              # 运营总览（Dashboard）
 │   │   ├── globals.css           # 全局样式
+│   │   ├── workspace/page.tsx    # 内容工作台（选题+脚本+文章合一）
 │   │   ├── topics/page.tsx       # 选题池（多维表视图）
 │   │   ├── scripts/page.tsx      # 脚本工坊（AI脚本生成）
 │   │   ├── articles/page.tsx     # 公众号文章（AI长文写作）
-│   │   ├── analytics/page.tsx    # 数据看板（播放/点赞/评论）
+│   │   ├── analytics/page.tsx    # 数据看板（播放/点赞/评论/爆款/情感分析）
 │   │   ├── datasources/page.tsx  # 数据源管理（抖音/微博/直播/视频下载）
 │   │   ├── workflows/page.tsx    # 工作流管理（卡片式列表+执行监控）
 │   │   ├── workflows/create/page.tsx # 工作流编辑器（可视化节点画布+AI助手）
 │   │   ├── workflows/templates/page.tsx # 模板市场（浏览+一键克隆）
 │   │   ├── team/page.tsx         # 团队协作（成员管理+任务分配）
-│   │   ├── knowledge/page.tsx    # 知识库（文档管理+语义搜索+AI引用）
-│   │   ├── settings/page.tsx     # 平台设置（抖音凭证+LLM配置+知识库配置）
+│   │   ├── knowledge/page.tsx    # 知识库（扁平化文档管理+分类+精选+语义搜索）
+│   │   ├── settings/page.tsx     # 系统设置（4个Tab：平台配置/团队/工作流/模板）
 │   │   └── api/                  # API 路由
 │   │       ├── analyze-topic/route.ts   # 选题热度分析（doubao-seed-2-0-lite）
 │   │       ├── generate-script/route.ts # 脚本大纲生成（qwen-3-5-plus，流式SSE）
