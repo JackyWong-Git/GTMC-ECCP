@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   BookOpen,
+  Send,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
@@ -18,6 +19,7 @@ import { useState, useEffect } from 'react';
 const navItems = [
   { href: '/', label: '运营总览', icon: LayoutDashboard },
   { href: '/topics', label: '选题中心', icon: FileText },
+  { href: '/channels', label: '渠道管理', icon: Send },
   { href: '/knowledge', label: '知识库', icon: BookOpen },
   { href: '/analytics', label: '数据看板', icon: BarChart3 },
   { href: '/settings', label: '系统设置', icon: Settings },

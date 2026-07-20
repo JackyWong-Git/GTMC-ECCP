@@ -27,6 +27,8 @@
 │   │   ├── page.tsx              # 运营总览（Dashboard）
 │   │   ├── globals.css           # 全局样式
 │   │   ├── topics/page.tsx       # 选题中心（看板+弹窗详情+内联脚本生成）
+│   │   ├── topics/[id]/page.tsx  # 内容工作台（脚本编辑+6渠道适配）
+│   │   ├── channels/page.tsx     # 渠道管理（6个渠道模板+发布状态）
 │   │   ├── scripts/page.tsx      # 脚本工坊（精简版：5种风格+流式生成）
 │   │   ├── articles/page.tsx     # 公众号文章（AI长文写作）
 │   │   ├── analytics/page.tsx    # 数据看板（播放/点赞/评论/爆款/情感分析）

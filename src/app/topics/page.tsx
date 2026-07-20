@@ -25,6 +25,7 @@ import {
   Sparkles,
   FileText,
   Trash2,
+  ExternalLink,
 } from "lucide-react";
 
 // Topic status flow
@@ -1073,9 +1074,17 @@ export default function TopicBoardPage() {
 
               {/* Quick Actions */}
               <div className="flex items-center gap-2 flex-wrap mb-6 p-4 bg-gray-50 rounded-lg">
+                <Button
+                  size="sm"
+                  onClick={() => router.push(`/topics/${selectedTopic.id}`)}
+                >
+                  <ExternalLink className="w-3 h-3 mr-1" />
+                  打开工作台
+                </Button>
                 {selectedTopic.status === "待认领" && (
                   <Button
                     size="sm"
+                    variant="outline"
                     onClick={() => {
                       handleClaimTopic(selectedTopic.id);
                       setSelectedTopic(null);
