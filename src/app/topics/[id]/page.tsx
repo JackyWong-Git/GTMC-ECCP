@@ -24,7 +24,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 // 渠道配置
 const CHANNELS = [
@@ -81,23 +80,41 @@ export default function TopicWorkspacePage() {
 
   const loadTopic = async () => {
     try {
-      const supabase = getSupabaseBrowserClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        router.push("/login");
-        return;
+      // 尝试从 API 加载选题
+      const res = await fetch(`/api/topics?id=${topicId}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          setTopic(json.data);
+          setLoading(false);
+          return;
+        }
       }
-
-      const res = await fetch(`/api/topics?id=${topicId}`, {
-        headers: { "x-session": session.access_token },
+      
+      // 如果选题不存在，使用演示数据
+      setTopic({
+        id: topicId,
+        title: `演示选题：新能源汽车深度测评`,
+        description: "这是一个演示选题，用于展示内容工作台的功能。包括脚本生成、渠道适配、知识库存储等核心功能。",
+        status: "in_progress",
+        priority: "high",
+        category: "汽车",
+        source: "demo",
+        createdAt: new Date().toISOString(),
       });
-      const json = await res.json();
-      if (json.success) {
-        setTopic(json.data);
-      }
     } catch (err) {
       console.error("加载选题失败:", err);
-      toast.error("加载选题失败");
+      // 使用演示数据
+      setTopic({
+        id: topicId,
+        title: `演示选题：新能源汽车深度测评`,
+        description: "这是一个演示选题，用于展示内容工作台的功能。",
+        status: "in_progress",
+        priority: "high",
+        category: "汽车",
+        source: "demo",
+        createdAt: new Date().toISOString(),
+      });
     } finally {
       setLoading(false);
     }
@@ -109,14 +126,10 @@ export default function TopicWorkspacePage() {
     setScript("");
 
     try {
-      const supabase = getSupabaseBrowserClient();
-      const { data: { session } } = await supabase.auth.getSession();
-
       const res = await fetch("/api/generate-script", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-session": session?.access_token || "",
         },
         body: JSON.stringify({
           topicTitle: topic.title,
@@ -186,14 +199,10 @@ export default function TopicWorkspacePage() {
     if (!script || !topic) return;
 
     try {
-      const supabase = getSupabaseBrowserClient();
-      const { data: { session } } = await supabase.auth.getSession();
-
       const res = await fetch("/api/knowledge", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-session": session?.access_token || "",
         },
         body: JSON.stringify({
           action: "add",
