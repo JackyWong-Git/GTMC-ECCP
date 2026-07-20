@@ -118,17 +118,18 @@ export default function KnowledgePage() {
   const loadDocuments = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/knowledge?action=list');
+      const res = await fetch('/api/knowledge?action=list&limit=100');
       const data = await res.json();
       if (data.success) {
         const docs = (data.data?.documents || []).map((d: Record<string, unknown>) => ({
-          id: d.id || d.doc_id,
-          title: d.title || d.name || 'Untitled',
-          content: d.content || '',
-          source: d.source || 'local',
-          tags: d.tags || [],
-          category: d.category || 'other',
-          createdAt: d.createdAt || d.created_at || new Date().toISOString(),
+          id: d.id as string,
+          title: d.title as string,
+          content: d.content as string,
+          source: (d.source as string) || 'local',
+          tags: (d.tags as string[]) || [],
+          category: (d.category as string) || 'other',
+          createdAt: (d.createdAt as string) || new Date().toISOString(),
+          isFeatured: false,
         }));
         setDocuments(docs);
       }
@@ -179,14 +180,10 @@ export default function KnowledgePage() {
 
     setIsSearching(true);
     try {
-      const res = await fetch('/api/knowledge', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'search', query: searchQuery, topK: 10 }),
-      });
+      const res = await fetch(`/api/knowledge?action=search&q=${encodeURIComponent(searchQuery)}&limit=20`);
       const data = await res.json();
       if (data.success) {
-        setSearchResults(data.data || []);
+        setSearchResults(data.data?.results || []);
       }
     } catch (error) {
       console.error('Search failed:', error);
@@ -198,42 +195,33 @@ export default function KnowledgePage() {
   // Import document
   const handleImport = async () => {
     if (!importTitle.trim()) {
-      alert('请输入标题');
+      toast.error('请输入标题');
+      return;
+    }
+
+    if (!importContent.trim() && importSource !== 'url') {
+      toast.error('请输入文档内容');
       return;
     }
 
     setIsImporting(true);
     try {
-      let content = importContent;
-      if (importSource === 'url' && importUrl) {
-        // Fetch URL content
-        const urlRes = await fetch('/api/knowledge', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'fetch_url', url: importUrl }),
-        });
-        const urlData = await urlRes.json();
-        if (urlData.success) {
-          content = urlData.data?.content || '';
-        }
-      }
-
       const res = await fetch('/api/knowledge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'import',
+          action: 'add',
           title: importTitle,
-          content,
-          source: 'local',
+          content: importContent,
+          source: importSource === 'url' ? 'url' : 'local',
           category: importCategory,
-          tags: importTags.split(',').map(t => t.trim()).filter(Boolean),
+          tags: importTags.split(',').map((t: string) => t.trim()).filter(Boolean),
         }),
       });
 
       const data = await res.json();
       if (data.success) {
-        alert('导入成功');
+        toast.success('文档导入成功');
         setShowImportModal(false);
         setImportTitle('');
         setImportContent('');
@@ -241,10 +229,10 @@ export default function KnowledgePage() {
         setImportTags('');
         loadDocuments();
       } else {
-        alert(data.error || '导入失败');
+        toast.error(data.error || '导入失败');
       }
-    } catch (error) {
-      alert('网络错误');
+    } catch {
+      toast.error('网络错误');
     } finally {
       setIsImporting(false);
     }
@@ -255,17 +243,18 @@ export default function KnowledgePage() {
     if (!confirm('确定删除此文档？')) return;
 
     try {
-      const res = await fetch(`/api/knowledge?docId=${docId}`, {
+      const res = await fetch(`/api/knowledge?id=${docId}`, {
         method: 'DELETE',
       });
       const data = await res.json();
       if (data.success) {
+        toast.success('文档已删除');
         loadDocuments();
       } else {
-        alert(data.error || '删除失败');
+        toast.error(data.error || '删除失败');
       }
-    } catch (error) {
-      alert('网络错误');
+    } catch {
+      toast.error('网络错误');
     }
   };
 

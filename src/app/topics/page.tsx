@@ -109,6 +109,14 @@ export default function TopicBoardPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
 
+  // Topic detail modal state
+  const [selectedTopic, setSelectedTopic] = useState<InternalTopic | null>(null);
+  const [showScriptPanel, setShowScriptPanel] = useState(false);
+  const [scriptStyle, setScriptStyle] = useState("口播");
+  const [scriptDuration, setScriptDuration] = useState("60秒");
+  const [generatedScript, setGeneratedScript] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+
   // Auth-aware fetch helper
   const authFetch = (url: string, options: RequestInit = {}) => {
     const headers = new Headers(options.headers || {});
@@ -453,6 +461,89 @@ export default function TopicBoardPage() {
     router.push(`/scripts?topic=${encodeURIComponent(topic.title)}`);
   };
 
+  // Generate script inline
+  const handleGenerateScriptInline = async () => {
+    if (!selectedTopic) return;
+
+    setIsGenerating(true);
+    setGeneratedScript("");
+
+    try {
+      const res = await authFetch("/api/generate-script", {
+        method: "POST",
+        body: JSON.stringify({
+          topic: selectedTopic.title,
+          description: selectedTopic.description,
+          style: scriptStyle,
+          duration: scriptDuration,
+          platform: "抖音",
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("生成失败");
+      }
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split("\n");
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (data.content) {
+                  setGeneratedScript((prev) => prev + data.content);
+                }
+              } catch {
+                // Ignore parse errors
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Script generation failed:", err);
+      toast.error("脚本生成失败，请重试");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Save script to knowledge base
+  const handleSaveScriptToKnowledge = async () => {
+    if (!selectedTopic || !generatedScript) return;
+
+    try {
+      const res = await authFetch("/api/knowledge", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "add",
+          title: `${selectedTopic.title} - ${scriptStyle}脚本`,
+          content: generatedScript,
+          source: "脚本生成",
+          category: "content",
+          tags: ["脚本", scriptStyle, selectedTopic.title],
+        }),
+      });
+
+      if (res.ok) {
+        toast.success("脚本已存入知识库");
+      } else {
+        toast.error("保存失败");
+      }
+    } catch {
+      toast.error("保存失败");
+    }
+  };
+
   const handleLogout = async () => {
     if (supabase) {
       await supabase.auth.signOut();
@@ -558,7 +649,15 @@ export default function TopicBoardPage() {
                   {/* Cards */}
                   <div className="space-y-3">
                     {topicsByStatus[status.key]?.map((topic) => (
-                      <Card key={topic.id} className="hover:shadow-md transition-shadow">
+                      <Card
+                        key={topic.id}
+                        className="hover:shadow-md transition-shadow cursor-pointer"
+                        onClick={() => {
+                          setSelectedTopic(topic);
+                          setShowScriptPanel(false);
+                          setGeneratedScript("");
+                        }}
+                      >
                         <CardContent className="p-4">
                           <h3 className="font-medium text-sm mb-2 line-clamp-2">{topic.title}</h3>
                           {topic.description && (
@@ -908,6 +1007,216 @@ export default function TopicBoardPage() {
                   </Button>
                 </div>
               </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Topic Detail Modal */}
+      {selectedTopic && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+            <CardContent className="p-6 overflow-y-auto flex-1">
+              {/* Header */}
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex-1">
+                  <h2 className="text-xl font-semibold mb-2">{selectedTopic.title}</h2>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge className={PRIORITY_COLORS[selectedTopic.priority as keyof typeof PRIORITY_COLORS]}>
+                      {selectedTopic.priority}优先级
+                    </Badge>
+                    <Badge variant="outline">{selectedTopic.status}</Badge>
+                    {selectedTopic.assigned_to && (
+                      <Badge variant="secondary">负责人: {selectedTopic.assigned_to}</Badge>
+                    )}
+                    {selectedTopic.source && selectedTopic.source !== "手动创建" && (
+                      <Badge variant="outline">
+                        <Globe className="w-3 h-3 mr-1" />
+                        {selectedTopic.source}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedTopic(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </Button>
+              </div>
+
+              {/* Description */}
+              {selectedTopic.description && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-medium text-gray-500 mb-2">描述</h3>
+                  <p className="text-gray-700 whitespace-pre-wrap">{selectedTopic.description}</p>
+                </div>
+              )}
+
+              {/* Progress */}
+              {selectedTopic.progress > 0 && (
+                <div className="mb-6">
+                  <div className="flex items-center justify-between text-sm mb-2">
+                    <span className="text-gray-500">进度</span>
+                    <span className="font-medium">{selectedTopic.progress}%</span>
+                  </div>
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-blue-500 transition-all"
+                      style={{ width: `${selectedTopic.progress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Quick Actions */}
+              <div className="flex items-center gap-2 flex-wrap mb-6 p-4 bg-gray-50 rounded-lg">
+                {selectedTopic.status === "待认领" && (
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      handleClaimTopic(selectedTopic.id);
+                      setSelectedTopic(null);
+                    }}
+                  >
+                    认领选题
+                  </Button>
+                )}
+                {selectedTopic.status !== "待认领" &&
+                  selectedTopic.status !== "已发布" &&
+                  selectedTopic.status !== "已归档" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        handleAdvanceStatus(selectedTopic.id, selectedTopic.status);
+                        setSelectedTopic(null);
+                      }}
+                    >
+                      推进状态
+                      <ArrowRight className="w-3 h-3 ml-1" />
+                    </Button>
+                  )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowScriptPanel(!showScriptPanel)}
+                >
+                  <Sparkles className="w-3 h-3 mr-1" />
+                  {showScriptPanel ? "收起脚本生成" : "生成脚本"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    handleSaveTopicToKnowledge(selectedTopic);
+                  }}
+                >
+                  <Database className="w-3 h-3 mr-1" />
+                  存知识库
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                  onClick={() => {
+                    handleDeleteTopic(selectedTopic.id);
+                    setSelectedTopic(null);
+                  }}
+                >
+                  <Trash2 className="w-3 h-3 mr-1" />
+                  删除
+                </Button>
+              </div>
+
+              {/* Script Generation Panel */}
+              {showScriptPanel && (
+                <div className="border-t pt-4">
+                  <h3 className="text-sm font-medium mb-4">脚本生成</h3>
+
+                  {/* Options */}
+                  <div className="flex items-center gap-4 mb-4">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">风格</label>
+                      <select
+                        value={scriptStyle}
+                        onChange={(e) => setScriptStyle(e.target.value)}
+                        className="px-3 py-1.5 border rounded-md text-sm"
+                      >
+                        <option value="口播">口播</option>
+                        <option value="剧情">剧情</option>
+                        <option value="测评">测评</option>
+                        <option value="教程">教程</option>
+                        <option value="Vlog">Vlog</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">时长</label>
+                      <select
+                        value={scriptDuration}
+                        onChange={(e) => setScriptDuration(e.target.value)}
+                        className="px-3 py-1.5 border rounded-md text-sm"
+                      >
+                        <option value="30秒">30秒</option>
+                        <option value="60秒">60秒</option>
+                        <option value="90秒">90秒</option>
+                        <option value="3分钟">3分钟</option>
+                      </select>
+                    </div>
+                    <div className="flex-1" />
+                    <Button
+                      size="sm"
+                      onClick={handleGenerateScriptInline}
+                      disabled={isGenerating}
+                    >
+                      {isGenerating ? (
+                        <>
+                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                          生成中...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3 h-3 mr-1" />
+                          生成
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  {/* Generated Script */}
+                  {generatedScript && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-500">生成结果</span>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              navigator.clipboard.writeText(generatedScript);
+                              toast.success("已复制");
+                            }}
+                          >
+                            复制
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={handleSaveScriptToKnowledge}
+                          >
+                            存知识库
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4 max-h-64 overflow-y-auto">
+                        <pre className="text-sm whitespace-pre-wrap font-sans">{generatedScript}</pre>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

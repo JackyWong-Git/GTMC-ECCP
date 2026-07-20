@@ -11,14 +11,13 @@ import {
   ChevronLeft,
   ChevronRight,
   BookOpen,
-  PenTool,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 
 const navItems = [
   { href: '/', label: '运营总览', icon: LayoutDashboard },
-  { href: '/workspace', label: '内容工作台', icon: PenTool },
+  { href: '/topics', label: '选题中心', icon: FileText },
   { href: '/knowledge', label: '知识库', icon: BookOpen },
   { href: '/analytics', label: '数据看板', icon: BarChart3 },
   { href: '/settings', label: '系统设置', icon: Settings },
