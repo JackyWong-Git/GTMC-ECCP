@@ -472,7 +472,7 @@ export default function TopicBoardPage() {
       const res = await authFetch("/api/generate-script", {
         method: "POST",
         body: JSON.stringify({
-          topic: selectedTopic.title,
+          topicTitle: selectedTopic.title,
           description: selectedTopic.description,
           style: scriptStyle,
           duration: scriptDuration,

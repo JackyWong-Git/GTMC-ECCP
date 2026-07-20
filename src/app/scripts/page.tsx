@@ -129,7 +129,7 @@ export default function ScriptsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          topic,
+          topicTitle: topic,
           description,
           style: agent?.style || '',
           duration,
